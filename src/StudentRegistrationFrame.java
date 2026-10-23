@@ -7,6 +7,13 @@ import java.awt.event.ActionListener;
  * StudentRegistrationFrame.java
  * Clean SaaS-style registration form for students.
  * Collects student details, academic criteria, and login credentials with comprehensive client validation.
+ * Supports all 6 required preference profile aspects:
+ * 1. Interests (Checkboxes: Coding, AI, Robotics, Entrepreneurship, Music, Dance, Photography, Sports, Public Speaking, Design)
+ * 2. Skills & Skill Level (Text field + Beginner/Intermediate/Advanced)
+ * 3. Budget & "Free events only" toggle
+ * 4. Availability (Time slot + Preferred Days)
+ * 5. Career & Learning Goals
+ * 6. Location / Event Format (In-person, Online, Either)
  */
 public class StudentRegistrationFrame extends JFrame {
 
@@ -19,16 +26,25 @@ public class StudentRegistrationFrame extends JFrame {
     private JComboBox<String> cmbDept;
     private JComboBox<Integer> cmbYear;
     private JTextField txtBudget;
+    private JCheckBox cbFreeOnly;
     private JComboBox<String> cmbTimeSlot;
+    private JComboBox<String> cmbPreferredDays;
     private JTextField txtSkills;
+    private JComboBox<String> cmbSkillLevel;
+    private JComboBox<String> cmbCareerGoals;
+    private JComboBox<String> cmbPreferredFormat;
 
-    // Interest Checkboxes
+    // 10 Specific Course-Aligned Interest Checkboxes
     private JCheckBox cbCoding;
     private JCheckBox cbAI;
     private JCheckBox cbRobotics;
-    private JCheckBox cbSports;
-    private JCheckBox cbArts;
     private JCheckBox cbEntrepreneurship;
+    private JCheckBox cbMusic;
+    private JCheckBox cbDance;
+    private JCheckBox cbPhotography;
+    private JCheckBox cbSports;
+    private JCheckBox cbPublicSpeaking;
+    private JCheckBox cbDesign;
 
     // Action buttons
     private JButton btnCreateAccount;
@@ -44,17 +60,21 @@ public class StudentRegistrationFrame extends JFrame {
 
     public StudentRegistrationFrame() {
         setTitle("Campus Event Recommendation System - Create Student Account");
-        setSize(680, 800);
+        setSize(720, 850);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        setResizable(false);
+        setResizable(true);
         getContentPane().setBackground(BG_CANVAS);
-        setLayout(new GridBagLayout()); // Center the card panel
+        setLayout(new BorderLayout());
 
         initUI();
     }
 
     private void initUI() {
+        JPanel outerPanel = new JPanel(new GridBagLayout());
+        outerPanel.setBackground(BG_CANVAS);
+        outerPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+
         JPanel card = new JPanel();
         card.setLayout(new BorderLayout(15, 15));
         card.setBackground(BG_CARD);
@@ -62,26 +82,26 @@ public class StudentRegistrationFrame extends JFrame {
             BorderFactory.createLineBorder(BORDER_CARD, 1),
             BorderFactory.createEmptyBorder(25, 30, 25, 30)
         ));
-        card.setPreferredSize(new Dimension(620, 720));
+        card.setPreferredSize(new Dimension(650, 780));
 
         // 1. Header (Title & Subtitle)
         JPanel headerPanel = new JPanel(new GridLayout(2, 1, 3, 3));
         headerPanel.setOpaque(false);
 
-        JLabel lblTitle = new JLabel("Create Student Account", SwingConstants.CENTER);
-        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        JLabel lblTitle = new JLabel("Create Student Account & Preference Profile", SwingConstants.CENTER);
+        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 18));
         lblTitle.setForeground(TEXT_NAVY);
         headerPanel.add(lblTitle);
 
-        JLabel lblSubtitle = new JLabel("Enter your academic details to receive personalized event recommendations.", SwingConstants.CENTER);
+        JLabel lblSubtitle = new JLabel("Configure your academic and personal preferences for transparent event recommendations.", SwingConstants.CENTER);
         lblSubtitle.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         lblSubtitle.setForeground(TEXT_MUTED);
         headerPanel.add(lblSubtitle);
 
         card.add(headerPanel, BorderLayout.NORTH);
 
-        // 2. Form Grid (Centered 2-column form)
-        JPanel formGrid = new JPanel(new GridLayout(10, 2, 12, 10));
+        // 2. Form Grid (Two-column layout)
+        JPanel formGrid = new JPanel(new GridLayout(13, 2, 10, 8));
         formGrid.setOpaque(false);
 
         // Row 1: Full Name
@@ -123,41 +143,100 @@ public class StudentRegistrationFrame extends JFrame {
         deptYearPanel.add(cmbYear);
         formGrid.add(deptYearPanel);
 
-        // Row 7: Max Budget & Available Slot
-        formGrid.add(createLabel("Max Budget & Availability: *"));
-        JPanel budgetSlotPanel = new JPanel(new GridLayout(1, 2, 8, 0));
-        budgetSlotPanel.setOpaque(false);
+        // Row 7: Max Budget & Free Only
+        formGrid.add(createLabel("Budget & Affordability: *"));
+        JPanel budgetPanel = new JPanel(new BorderLayout(8, 0));
+        budgetPanel.setOpaque(false);
         txtBudget = createTextField("200.0");
-        cmbTimeSlot = new JComboBox<String>(new String[]{"Morning", "Afternoon", "Evening", "All"});
+        cbFreeOnly = new JCheckBox("Free events only");
+        cbFreeOnly.setOpaque(false);
+        cbFreeOnly.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        cbFreeOnly.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                if (cbFreeOnly.isSelected()) {
+                    txtBudget.setText("0.0");
+                    txtBudget.setEnabled(false);
+                } else {
+                    txtBudget.setEnabled(true);
+                    txtBudget.setText("200.0");
+                }
+            }
+        });
+        budgetPanel.add(txtBudget, BorderLayout.CENTER);
+        budgetPanel.add(cbFreeOnly, BorderLayout.EAST);
+        formGrid.add(budgetPanel);
+
+        // Row 8: Skills & Skill Level
+        formGrid.add(createLabel("Skills & Skill Level:"));
+        JPanel skillPanel = new JPanel(new BorderLayout(8, 0));
+        skillPanel.setOpaque(false);
+        txtSkills = createTextField("Java, Python, Public Speaking");
+        cmbSkillLevel = new JComboBox<String>(new String[]{"Beginner", "Intermediate", "Advanced"});
+        cmbSkillLevel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        skillPanel.add(txtSkills, BorderLayout.CENTER);
+        skillPanel.add(cmbSkillLevel, BorderLayout.EAST);
+        formGrid.add(skillPanel);
+
+        // Row 9: Availability: Preferred Days & Time Slot
+        formGrid.add(createLabel("Availability (Days & Slot): *"));
+        JPanel availPanel = new JPanel(new GridLayout(1, 2, 8, 0));
+        availPanel.setOpaque(false);
+        cmbPreferredDays = new JComboBox<String>(new String[]{"Both", "Weekdays", "Weekends"});
+        cmbPreferredDays.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        cmbTimeSlot = new JComboBox<String>(new String[]{"All", "Morning", "Afternoon", "Evening"});
         cmbTimeSlot.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        budgetSlotPanel.add(txtBudget);
-        budgetSlotPanel.add(cmbTimeSlot);
-        formGrid.add(budgetSlotPanel);
+        availPanel.add(cmbPreferredDays);
+        availPanel.add(cmbTimeSlot);
+        formGrid.add(availPanel);
 
-        // Row 8: Skills
-        formGrid.add(createLabel("Your Skills:"));
-        txtSkills = createTextField("Java, Python, Communication");
-        formGrid.add(txtSkills);
+        // Row 10: Career & Learning Goals
+        formGrid.add(createLabel("Career & Learning Goal:"));
+        cmbCareerGoals = new JComboBox<String>(new String[]{
+            "Improve programming skills",
+            "Prepare for placements",
+            "Develop leadership",
+            "Build a portfolio",
+            "Learn AI",
+            "Improve communication",
+            "Explore new technologies"
+        });
+        cmbCareerGoals.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        formGrid.add(cmbCareerGoals);
 
-        // Row 9: Preferred Interests Checkboxes
-        formGrid.add(createLabel("Interests: *"));
-        JPanel cbPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        // Row 11: Preferred Format
+        formGrid.add(createLabel("Event Format Preference:"));
+        cmbPreferredFormat = new JComboBox<String>(new String[]{"Either", "In-person", "Online"});
+        cmbPreferredFormat.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        formGrid.add(cmbPreferredFormat);
+
+        // Row 12: Interests (Grid of Checkboxes)
+        formGrid.add(createLabel("Interests (select 1+): *"));
+        JPanel cbPanel = new JPanel(new GridLayout(2, 5, 4, 4));
         cbPanel.setOpaque(false);
         cbCoding = new JCheckBox("Coding", true);
         cbAI = new JCheckBox("AI", true);
         cbRobotics = new JCheckBox("Robotics");
-        cbSports = new JCheckBox("Sports");
-        cbArts = new JCheckBox("Arts");
         cbEntrepreneurship = new JCheckBox("Entrepreneurship");
+        cbMusic = new JCheckBox("Music");
+        cbDance = new JCheckBox("Dance");
+        cbPhotography = new JCheckBox("Photography");
+        cbSports = new JCheckBox("Sports");
+        cbPublicSpeaking = new JCheckBox("Public Speaking");
+        cbDesign = new JCheckBox("Design");
+
         cbPanel.add(cbCoding);
         cbPanel.add(cbAI);
         cbPanel.add(cbRobotics);
-        cbPanel.add(cbSports);
-        cbPanel.add(cbArts);
         cbPanel.add(cbEntrepreneurship);
+        cbPanel.add(cbMusic);
+        cbPanel.add(cbDance);
+        cbPanel.add(cbPhotography);
+        cbPanel.add(cbSports);
+        cbPanel.add(cbPublicSpeaking);
+        cbPanel.add(cbDesign);
         formGrid.add(cbPanel);
 
-        // Row 10: Empty filler row
+        // Row 13: Empty spacer
         formGrid.add(new JLabel(""));
         formGrid.add(new JLabel(""));
 
@@ -197,7 +276,11 @@ public class StudentRegistrationFrame extends JFrame {
 
         card.add(buttonPanel, BorderLayout.SOUTH);
 
-        add(card);
+        outerPanel.add(card);
+        JScrollPane scrollPane = new JScrollPane(outerPanel);
+        scrollPane.setBorder(null);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        add(scrollPane, BorderLayout.CENTER);
     }
 
     /**
@@ -273,8 +356,7 @@ public class StudentRegistrationFrame extends JFrame {
         }
 
         // 6. Check at least one interest selected
-        if (!cbCoding.isSelected() && !cbAI.isSelected() && !cbRobotics.isSelected() &&
-            !cbSports.isSelected() && !cbArts.isSelected() && !cbEntrepreneurship.isSelected()) {
+        if (getSelectedInterests().isEmpty()) {
             JOptionPane.showMessageDialog(this,
                 "Please select at least one preferred category interest.",
                 "Interest Required",
@@ -303,9 +385,15 @@ public class StudentRegistrationFrame extends JFrame {
         double budget = getBudget();
         String slot = getTimeSlot();
         String skills = getSkills();
+        String skillLevel = getSkillLevel();
+        String preferredDays = getPreferredDays();
+        String careerGoals = getCareerGoals();
+        String preferredFormat = getPreferredFormat();
+        boolean freeOnly = cbFreeOnly.isSelected();
         String interests = getSelectedInterests();
 
-        Student student = new Student(0, fullName, email, dept, year, budget, interests, skills, slot);
+        Student student = new Student(0, fullName, email, dept, year, budget, interests,
+                                      skills, skillLevel, slot, preferredDays, careerGoals, preferredFormat, freeOnly);
         UserDAO userDAO = new UserDAO();
 
         // 1. Check if student ID / username already taken
@@ -334,9 +422,10 @@ public class StudentRegistrationFrame extends JFrame {
         if (success) {
             JOptionPane.showMessageDialog(this,
                 "Student account successfully created for " + fullName + "!\n\n"
-                + "Student ID : " + studentId + "\n"
-                + "Email      : " + email + "\n"
-                + "Department : " + dept + " (Year " + year + ")\n\n"
+                + "Student ID    : " + studentId + "\n"
+                + "Email         : " + email + "\n"
+                + "Department    : " + dept + " (Year " + year + ")\n"
+                + "Career Goal   : " + careerGoals + "\n\n"
                 + "You can now log in using your Student ID or Email.",
                 "Registration Successful",
                 JOptionPane.INFORMATION_MESSAGE);
@@ -351,7 +440,7 @@ public class StudentRegistrationFrame extends JFrame {
         }
     }
 
-    // Getters for form data (used in Phase 3 database insertion)
+    // Getters for form data
     public String getFullName() { return txtFullName.getText().trim(); }
     public String getEmail() { return txtEmail.getText().trim(); }
     public String getStudentId() { return txtStudentId.getText().trim(); }
@@ -360,15 +449,25 @@ public class StudentRegistrationFrame extends JFrame {
     public int getAcademicYear() { return (Integer) cmbYear.getSelectedItem(); }
     public double getBudget() { return Double.parseDouble(txtBudget.getText().trim()); }
     public String getTimeSlot() { return (String) cmbTimeSlot.getSelectedItem(); }
+    public String getPreferredDays() { return (String) cmbPreferredDays.getSelectedItem(); }
     public String getSkills() { return txtSkills.getText().trim(); }
+    public String getSkillLevel() { return (String) cmbSkillLevel.getSelectedItem(); }
+    public String getCareerGoals() { return (String) cmbCareerGoals.getSelectedItem(); }
+    public String getPreferredFormat() { return (String) cmbPreferredFormat.getSelectedItem(); }
+    public boolean isFreeOnly() { return cbFreeOnly.isSelected(); }
+
     public String getSelectedInterests() {
         String interests = "";
         if (cbCoding.isSelected()) interests += "Coding, ";
         if (cbAI.isSelected()) interests += "AI, ";
         if (cbRobotics.isSelected()) interests += "Robotics, ";
-        if (cbSports.isSelected()) interests += "Sports, ";
-        if (cbArts.isSelected()) interests += "Arts, ";
         if (cbEntrepreneurship.isSelected()) interests += "Entrepreneurship, ";
+        if (cbMusic.isSelected()) interests += "Music, ";
+        if (cbDance.isSelected()) interests += "Dance, ";
+        if (cbPhotography.isSelected()) interests += "Photography, ";
+        if (cbSports.isSelected()) interests += "Sports, ";
+        if (cbPublicSpeaking.isSelected()) interests += "Public Speaking, ";
+        if (cbDesign.isSelected()) interests += "Design, ";
         if (interests.endsWith(", ")) interests = interests.substring(0, interests.length() - 2);
         return interests;
     }

@@ -162,8 +162,9 @@ public class UserDAO {
             }
 
             // 2. Insert into students table
-            String studentSql = "INSERT INTO students (name, email, department, academic_year, budget, interests, skills, availability) "
-                              + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+            String studentSql = "INSERT INTO students (name, email, department, academic_year, budget, "
+                              + "interests, skills, availability, skill_level, preferred_days, career_goals, preferred_format, free_only) "
+                              + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             try (PreparedStatement psStudent = conn.prepareStatement(studentSql)) {
                 psStudent.setString(1, student.getName());
                 psStudent.setString(2, student.getEmail());
@@ -173,6 +174,11 @@ public class UserDAO {
                 psStudent.setString(6, student.getInterests());
                 psStudent.setString(7, student.getSkills());
                 psStudent.setString(8, student.getAvailableSlot());
+                psStudent.setString(9, student.getSkillLevel());
+                psStudent.setString(10, student.getPreferredDays());
+                psStudent.setString(11, student.getCareerGoals());
+                psStudent.setString(12, student.getPreferredFormat());
+                psStudent.setInt(13, student.isFreeOnly() ? 1 : 0);
                 psStudent.executeUpdate();
             }
 

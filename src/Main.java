@@ -208,20 +208,11 @@ public class Main extends JFrame {
      */
     private void openDashboardForUser(User user) {
         if (user.isStudent()) {
-            StudentDashboard studentDashboard = new StudentDashboard(
-                new EventDAO(),
-                new RegistrationDAO(),
-                new StudentDAO(),
-                user
-            );
+            StudentDashboard studentDashboard = new StudentDashboard(user);
             studentDashboard.setVisible(true);
             this.dispose(); // Close login window
         } else if (user.isCoordinator()) {
-            EventManagerDashboard coordinatorDashboard = new EventManagerDashboard(
-                new EventDAO(),
-                new RegistrationDAO(),
-                user
-            );
+            EventManagerDashboard coordinatorDashboard = new EventManagerDashboard(user);
             coordinatorDashboard.setVisible(true);
             this.dispose(); // Close login window
         } else {

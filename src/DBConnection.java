@@ -14,7 +14,7 @@ public class DBConnection {
     // Database connection parameters - Stored in one place
     private static final String URL = "jdbc:mysql://localhost:3306/campus_events_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
     private static String USER = "root";
-    private static String PASSWORD = "hayden15"; // Confirmed MySQL root password
+    private static String PASSWORD = "Vedha@0523"; // Confirmed MySQL root password
 
     // Static block to load the MySQL Connector/J driver
     static {

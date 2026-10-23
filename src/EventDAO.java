@@ -8,15 +8,14 @@ import java.util.ArrayList;
 /**
  * EventDAO.java
  * Data Access Object (DAO) for Event CRUD operations using JDBC.
- * Follows the patterns taught in Slide 9, 13, 14, and 15 of the Database notes:
- * - Uses PreparedStatement for parameterized queries to prevent SQL injection.
- * - Maps SQL rows to Event model objects.
+ * Supports course-taught PreparedStatement queries, safe table migrations,
+ * and retrieval for Audience Insights, Budget Finder, and Learning Pathways.
  */
 public class EventDAO {
 
     /**
      * Creates the events table if it doesn't already exist.
-     * Matches the createTable() method from Slide 13.
+     * Safely executes ALTER TABLE to support format, target skill level, time bounds, and capacity.
      */
     public void createTable() {
         String sql = "CREATE TABLE IF NOT EXISTS events ("
@@ -29,11 +28,24 @@ public class EventDAO {
                    + "venue VARCHAR(120) NOT NULL, "
                    + "required_skills VARCHAR(255), "
                    + "eligible_dept VARCHAR(100) DEFAULT 'All', "
-                   + "eligible_year INT DEFAULT 0"
+                   + "eligible_year INT DEFAULT 0, "
+                   + "event_format VARCHAR(20) DEFAULT 'In-person', "
+                   + "target_skill_level VARCHAR(20) DEFAULT 'All', "
+                   + "start_time VARCHAR(20) DEFAULT '10:00', "
+                   + "end_time VARCHAR(20) DEFAULT '12:00', "
+                   + "max_capacity INT DEFAULT 50"
                    + ")";
         try (Connection conn = DBConnection.getConnection();
              Statement stmt = conn.createStatement()) {
             stmt.execute(sql);
+
+            // Safe backward-compatible migrations
+            try { stmt.execute("ALTER TABLE events ADD COLUMN event_format VARCHAR(20) DEFAULT 'In-person'"); } catch (SQLException ignored) {}
+            try { stmt.execute("ALTER TABLE events ADD COLUMN target_skill_level VARCHAR(20) DEFAULT 'All'"); } catch (SQLException ignored) {}
+            try { stmt.execute("ALTER TABLE events ADD COLUMN start_time VARCHAR(20) DEFAULT '10:00'"); } catch (SQLException ignored) {}
+            try { stmt.execute("ALTER TABLE events ADD COLUMN end_time VARCHAR(20) DEFAULT '12:00'"); } catch (SQLException ignored) {}
+            try { stmt.execute("ALTER TABLE events ADD COLUMN max_capacity INT DEFAULT 50"); } catch (SQLException ignored) {}
+
         } catch (SQLException e) {
             System.err.println("Error creating events table: " + e.getMessage());
         }
@@ -41,11 +53,11 @@ public class EventDAO {
 
     /**
      * Inserts a new event into the database.
-     * Matches the addStudent() pattern from Slide 13.
      */
     public boolean addEvent(Event event) {
-        String sql = "INSERT INTO events (title, category, event_date, time_slot, fee, venue, required_skills, eligible_dept, eligible_year) "
-                   + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO events (title, category, event_date, time_slot, fee, venue, required_skills, "
+                   + "eligible_dept, eligible_year, event_format, target_skill_level, start_time, end_time, max_capacity) "
+                   + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, event.getTitle());
@@ -57,12 +69,17 @@ public class EventDAO {
             ps.setString(7, event.getRequiredSkills());
             ps.setString(8, event.getEligibleDept());
             ps.setInt(9, event.getEligibleYear());
+            ps.setString(10, event.getEventFormat());
+            ps.setString(11, event.getTargetSkillLevel());
+            ps.setString(12, event.getStartTime());
+            ps.setString(13, event.getEndTime());
+            ps.setInt(14, event.getMaxCapacity());
 
             int rowsAffected = ps.executeUpdate();
             if (rowsAffected > 0) {
-                try (ResultSet generatedKeys = ps.getGeneratedKeys()) {
-                    if (generatedKeys.next()) {
-                        event.setEventId(generatedKeys.getInt(1));
+                try (ResultSet keys = ps.getGeneratedKeys()) {
+                    if (keys.next()) {
+                        event.setEventId(keys.getInt(1));
                     }
                 }
                 return true;
@@ -75,46 +92,31 @@ public class EventDAO {
     }
 
     /**
-     * Retrieves all events from the database ordered by event_id.
-     * Matches the getAllStudents() pattern from Slide 14.
+     * Retrieves all events from the database.
      */
     public ArrayList<Event> getAllEvents() {
         ArrayList<Event> list = new ArrayList<Event>();
-        String sql = "SELECT event_id, title, category, event_date, time_slot, fee, venue, required_skills, eligible_dept, eligible_year "
-                   + "FROM events ORDER BY event_id ASC";
+        String sql = "SELECT * FROM events ORDER BY event_id ASC";
         try (Connection conn = DBConnection.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
 
             while (rs.next()) {
-                Event ev = new Event(
-                    rs.getInt("event_id"),
-                    rs.getString("title"),
-                    rs.getString("category"),
-                    rs.getString("event_date"),
-                    rs.getString("time_slot"),
-                    rs.getDouble("fee"),
-                    rs.getString("venue"),
-                    rs.getString("required_skills"),
-                    rs.getString("eligible_dept"),
-                    rs.getInt("eligible_year")
-                );
-                list.add(ev);
+                list.add(mapRowToEvent(rs));
             }
         } catch (SQLException e) {
-            System.err.println("Error fetching events: " + e.getMessage());
-            e.printStackTrace();
+            System.err.println("Error retrieving events: " + e.getMessage());
         }
         return list;
     }
 
     /**
      * Updates an existing event's details.
-     * Matches the updateStudent() pattern from Slide 15.
      */
     public boolean updateEvent(Event event) {
         String sql = "UPDATE events SET title=?, category=?, event_date=?, time_slot=?, "
-                   + "fee=?, venue=?, required_skills=?, eligible_dept=?, eligible_year=? "
+                   + "fee=?, venue=?, required_skills=?, eligible_dept=?, eligible_year=?, "
+                   + "event_format=?, target_skill_level=?, start_time=?, end_time=?, max_capacity=? "
                    + "WHERE event_id=?";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -127,7 +129,12 @@ public class EventDAO {
             ps.setString(7, event.getRequiredSkills());
             ps.setString(8, event.getEligibleDept());
             ps.setInt(9, event.getEligibleYear());
-            ps.setInt(10, event.getEventId());
+            ps.setString(10, event.getEventFormat());
+            ps.setString(11, event.getTargetSkillLevel());
+            ps.setString(12, event.getStartTime());
+            ps.setString(13, event.getEndTime());
+            ps.setInt(14, event.getMaxCapacity());
+            ps.setInt(15, event.getEventId());
 
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
@@ -139,7 +146,6 @@ public class EventDAO {
 
     /**
      * Deletes an event by its ID.
-     * Matches the deleteStudent() pattern from Slide 15.
      */
     public boolean deleteEvent(int eventId) {
         String sql = "DELETE FROM events WHERE event_id=?";
@@ -164,23 +170,47 @@ public class EventDAO {
             ps.setInt(1, eventId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
-                    return new Event(
-                        rs.getInt("event_id"),
-                        rs.getString("title"),
-                        rs.getString("category"),
-                        rs.getString("event_date"),
-                        rs.getString("time_slot"),
-                        rs.getDouble("fee"),
-                        rs.getString("venue"),
-                        rs.getString("required_skills"),
-                        rs.getString("eligible_dept"),
-                        rs.getInt("eligible_year")
-                    );
+                    return mapRowToEvent(rs);
                 }
             }
         } catch (SQLException e) {
             System.err.println("Error finding event by ID: " + e.getMessage());
         }
         return null;
+    }
+
+    /**
+     * Maps a ResultSet row to an Event model object with safe fallbacks.
+     */
+    private Event mapRowToEvent(ResultSet rs) throws SQLException {
+        String format = "In-person";
+        String targetLevel = "All";
+        String start = "10:00";
+        String end = "12:00";
+        int capacity = 50;
+
+        try { format = rs.getString("event_format"); } catch (SQLException ignored) {}
+        try { targetLevel = rs.getString("target_skill_level"); } catch (SQLException ignored) {}
+        try { start = rs.getString("start_time"); } catch (SQLException ignored) {}
+        try { end = rs.getString("end_time"); } catch (SQLException ignored) {}
+        try { capacity = rs.getInt("max_capacity"); } catch (SQLException ignored) {}
+
+        return new Event(
+            rs.getInt("event_id"),
+            rs.getString("title"),
+            rs.getString("category"),
+            rs.getString("event_date"),
+            rs.getString("time_slot"),
+            rs.getDouble("fee"),
+            rs.getString("venue"),
+            rs.getString("required_skills"),
+            rs.getString("eligible_dept"),
+            rs.getInt("eligible_year"),
+            format != null ? format : "In-person",
+            targetLevel != null ? targetLevel : "All",
+            start != null ? start : "10:00",
+            end != null ? end : "12:00",
+            capacity > 0 ? capacity : 50
+        );
     }
 }
