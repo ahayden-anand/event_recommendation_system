@@ -34,6 +34,8 @@ public class StudentDashboard extends JFrame {
     // Sidebar navigation buttons
     private CardLayout cardLayout;
     private JPanel mainContentPanel;
+    private java.util.Map<String, JButton> navButtons = new java.util.LinkedHashMap<String, JButton>();
+    private String currentActiveTab = "REC";
 
     // Tab 1: Recommended Events
     private DefaultTableModel recTableModel;
@@ -46,22 +48,33 @@ public class StudentDashboard extends JFrame {
     private JTable budgetTable;
     private JTextField txtMaxBudgetFilter;
     private JCheckBox cbFreeOnlyFilter;
+    private JLabel lblBudgetMatchCount;
+    private ArrayList<Event> currentBudgetEvents;
 
     // Tab 3: Skill Growth
-    private JTextArea txtSkillPathways;
+    private JPanel pnlSkillCardsContainer;
 
     // Tab 4: Discover Something New
     private DefaultTableModel discoverTableModel;
     private JTable discoverTable;
     private JTextArea txtDiscoverExplanation;
+    private JButton btnRegisterDiscoverEvent;
+    private ArrayList<Event> currentDiscoverEvents;
 
     // Tab 5: Browse All Events
     private DefaultTableModel allEventsTableModel;
     private JTable allEventsTable;
+    private JTextField txtCatalogSearch;
+    private JComboBox<String> cmbCatalogCategory;
+    private JComboBox<String> cmbCatalogFormat;
+    private JLabel lblCatalogCount;
+    private JTextArea txtCatalogDetails;
+    private ArrayList<Event> currentCatalogEvents;
 
     // Tab 6: My Registrations
     private DefaultTableModel myRegTableModel;
     private JTable myRegTable;
+    private JLabel lblMyRegStatus;
 
     // Tab 7: Preferences Form Fields
     private JTextField prefName;
@@ -150,13 +163,13 @@ public class StudentDashboard extends JFrame {
         navPanel.setOpaque(false);
         navPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        JButton btnNavRec = createNavButton("Recommended Events");
-        JButton btnNavBudget = createNavButton("Budget Finder");
-        JButton btnNavSkill = createNavButton("Skill Growth");
-        JButton btnNavDiscover = createNavButton("Discover New");
-        JButton btnNavBrowse = createNavButton("Browse Events");
-        JButton btnNavMyReg = createNavButton("My Registrations");
-        JButton btnNavPref = createNavButton("My Preferences");
+        JButton btnNavRec = createNavButton("Recommended Events", "REC");
+        JButton btnNavBudget = createNavButton("Budget Finder", "BUDGET");
+        JButton btnNavSkill = createNavButton("Skill Growth", "SKILL");
+        JButton btnNavDiscover = createNavButton("Discover New", "DISCOVER");
+        JButton btnNavBrowse = createNavButton("Browse Events", "BROWSE");
+        JButton btnNavMyReg = createNavButton("My Registrations", "MYREG");
+        JButton btnNavPref = createNavButton("My Preferences", "PREF");
 
         navPanel.add(btnNavRec);
         navPanel.add(btnNavBudget);
@@ -214,23 +227,66 @@ public class StudentDashboard extends JFrame {
         btnNavMyReg.addActionListener(e -> showTab("MYREG"));
         btnNavPref.addActionListener(e -> showTab("PREF"));
 
+        updateActiveNavButtons();
         add(root);
     }
 
     private void showTab(String key) {
+        currentActiveTab = key;
         cardLayout.show(mainContentPanel, key);
+        updateActiveNavButtons();
         refreshAllData();
     }
 
-    private JButton createNavButton(String title) {
-        JButton btn = new JButton(title);
+    private void updateActiveNavButtons() {
+        for (java.util.Map.Entry<String, JButton> entry : navButtons.entrySet()) {
+            String tabKey = entry.getKey();
+            JButton btn = entry.getValue();
+            if (tabKey.equals(currentActiveTab)) {
+                btn.setBackground(new Color(29, 78, 216)); // Vivid Royal Blue (#1D4ED8)
+                btn.setForeground(Color.WHITE);
+                btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+                btn.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createMatteBorder(0, 4, 0, 0, new Color(96, 165, 250)),
+                    BorderFactory.createEmptyBorder(8, 12, 8, 15)
+                ));
+            } else {
+                btn.setBackground(SIDEBAR_BG);
+                btn.setForeground(new Color(203, 213, 225));
+                btn.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+                btn.setBorder(BorderFactory.createEmptyBorder(8, 16, 8, 15));
+            }
+        }
+    }
+
+    private JButton createNavButton(String title, final String tabKey) {
+        final JButton btn = new JButton(title);
         btn.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        btn.setForeground(new Color(230, 235, 245));
+        btn.setForeground(new Color(203, 213, 225));
         btn.setBackground(SIDEBAR_BG);
-        btn.setBorder(BorderFactory.createEmptyBorder(8, 15, 8, 15));
+        btn.setBorder(BorderFactory.createEmptyBorder(8, 16, 8, 15));
         btn.setHorizontalAlignment(SwingConstants.LEFT);
         btn.setFocusPainted(false);
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        btn.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseEntered(java.awt.event.MouseEvent e) {
+                if (!tabKey.equals(currentActiveTab)) {
+                    btn.setBackground(new Color(30, 41, 59));
+                    btn.setForeground(Color.WHITE);
+                }
+            }
+            @Override
+            public void mouseExited(java.awt.event.MouseEvent e) {
+                if (!tabKey.equals(currentActiveTab)) {
+                    btn.setBackground(SIDEBAR_BG);
+                    btn.setForeground(new Color(203, 213, 225));
+                }
+            }
+        });
+
+        navButtons.put(tabKey, btn);
         return btn;
     }
 
@@ -241,7 +297,7 @@ public class StudentDashboard extends JFrame {
         panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
         // Header
-        JPanel header = createHeaderPanel("Recommended For You", "100-Point Rule-Based Match Scoring tailored to your preferences.");
+        JPanel header = createHeaderPanel("Recommended For You", "100-Point Match Scoring tailored to your academic profile & preferences.");
         JButton btnRegAction = new JButton("Register Selected Event");
         stylePrimaryButton(btnRegAction);
         btnRegAction.addActionListener(e -> handleRegisterSelectedRecommendation());
@@ -249,51 +305,103 @@ public class StudentDashboard extends JFrame {
         panel.add(header, BorderLayout.NORTH);
 
         // Table
-        String[] cols = {"Score", "Event Title", "Category", "Date & Slot", "Fee (Rs)", "Format", "Score Breakdown"};
+        String[] cols = {"Match Score", "Quality Tier", "Event Title", "Category", "Date & Slot", "Fee", "Format"};
         recTableModel = new DefaultTableModel(cols, 0) {
             public boolean isCellEditable(int r, int c) { return false; }
         };
         recTable = createStyledTable(recTableModel);
 
+        // Visual color renderer for Score & Tier
+        DefaultTableCellRenderer matchRenderer = new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                if (!isSelected && row >= 0 && currentRecommendations != null && row < currentRecommendations.size()) {
+                    int score = currentRecommendations.get(row).getScore();
+                    if (score >= 90) {
+                        c.setForeground(new Color(39, 174, 96));
+                        c.setFont(c.getFont().deriveFont(Font.BOLD));
+                    } else if (score >= 70) {
+                        c.setForeground(new Color(41, 128, 185));
+                        c.setFont(c.getFont().deriveFont(Font.BOLD));
+                    } else {
+                        c.setForeground(new Color(211, 84, 0));
+                        c.setFont(c.getFont().deriveFont(Font.BOLD));
+                    }
+                }
+                return c;
+            }
+        };
+        recTable.getColumnModel().getColumn(0).setCellRenderer(matchRenderer);
+        recTable.getColumnModel().getColumn(1).setCellRenderer(matchRenderer);
+
         JScrollPane scrollTable = new JScrollPane(recTable);
         scrollTable.setBorder(BorderFactory.createLineBorder(CARD_BORDER));
 
-        // Rationale card at bottom
+        // Rationale & details card at bottom
         JPanel rationaleCard = new JPanel(new BorderLayout(8, 8));
         rationaleCard.setBackground(CARD_BG);
         rationaleCard.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(CARD_BORDER),
             BorderFactory.createEmptyBorder(12, 15, 12, 15)
         ));
-        JLabel lblRat = new JLabel("Why This Event? (Selected Match Rationale):");
+        JLabel lblRat = new JLabel("Transparent 100-Point Match Score & Event Overview:");
         lblRat.setFont(new Font("Segoe UI", Font.BOLD, 12));
         lblRat.setForeground(TEXT_NAVY);
 
-        txtRecExplanation = new JTextArea("Select any recommended event from the table above to view its transparent matching explanation.", 3, 40);
+        txtRecExplanation = new JTextArea("Select any recommended event from the table above to view its transparent matching explanation.", 4, 40);
         txtRecExplanation.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         txtRecExplanation.setForeground(TEXT_NAVY);
         txtRecExplanation.setLineWrap(true);
         txtRecExplanation.setWrapStyleWord(true);
         txtRecExplanation.setEditable(false);
-        txtRecExplanation.setBackground(CARD_BG);
+        txtRecExplanation.setBackground(new Color(248, 250, 253));
+        txtRecExplanation.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(220, 230, 245), 1),
+            BorderFactory.createEmptyBorder(8, 10, 8, 10)
+        ));
+
+        JButton btnRegBottom = new JButton("Register for Event");
+        stylePrimaryButton(btnRegBottom);
+        btnRegBottom.addActionListener(e -> handleRegisterSelectedRecommendation());
 
         rationaleCard.add(lblRat, BorderLayout.NORTH);
         rationaleCard.add(txtRecExplanation, BorderLayout.CENTER);
+        rationaleCard.add(btnRegBottom, BorderLayout.EAST);
 
         recTable.getSelectionModel().addListSelectionListener(e -> {
             int row = recTable.getSelectedRow();
             if (row >= 0 && currentRecommendations != null && row < currentRecommendations.size()) {
-                EventRecommendation rec = currentRecommendations.get(row);
-                txtRecExplanation.setText(rec.getMatchReason() + "\n\nBreakdown: " + rec.getBreakdownText());
+                updateRecommendationDetailsCard(currentRecommendations.get(row));
             }
         });
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, scrollTable, rationaleCard);
-        splitPane.setResizeWeight(0.75);
+        splitPane.setResizeWeight(0.68);
         splitPane.setBorder(null);
 
         panel.add(splitPane, BorderLayout.CENTER);
         return panel;
+    }
+
+    private void updateRecommendationDetailsCard(EventRecommendation rec) {
+        if (rec == null) return;
+        Event ev = rec.getEvent();
+        int count = registrationDAO.getRegistrationCountForEvent(ev.getEventId());
+        int remaining = Math.max(0, ev.getMaxCapacity() - count);
+        String feeStr = ev.getFee() == 0.0 ? "FREE" : "Rs. " + ev.getFee();
+
+        txtRecExplanation.setText(
+            "Event: " + ev.getTitle() + "  |  Category: " + ev.getCategory() + " [" + ev.getEventFormat() + "]  |  Fee: " + feeStr + "\n"
+            + "Schedule: " + ev.getEventDate() + " (" + ev.getTimeSlot() + ") " + ev.getStartTime() + " - " + ev.getEndTime() + "  |  Venue: " + ev.getVenue() + "  |  Seats: " + count + "/" + ev.getMaxCapacity() + " (" + remaining + " remaining)\n\n"
+            + "100-POINT SCORING BREAKDOWN:\n"
+            + "  * Interests Match: +" + rec.getInterestScore() + "/30 pts\n"
+            + "  * Skill Progression: +" + rec.getSkillScore() + "/25 pts\n"
+            + "  * Budget Affordability: +" + rec.getBudgetScore() + "/20 pts\n"
+            + "  * Time Slot & Day Match: +" + rec.getAvailabilityScore() + "/15 pts\n"
+            + "  * Career Goal Alignment: +" + rec.getCareerGoalScore() + "/10 pts\n\n"
+            + "MATCH ANALYSIS: " + rec.getMatchReason()
+        );
     }
 
     // --- TAB 2: BUDGET-FRIENDLY EVENT FINDER ---
@@ -307,6 +415,10 @@ public class StudentDashboard extends JFrame {
         JPanel filterControls = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         filterControls.setOpaque(false);
 
+        lblBudgetMatchCount = new JLabel("Showing affordable events");
+        lblBudgetMatchCount.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lblBudgetMatchCount.setForeground(TEXT_NAVY);
+
         JLabel lblMax = new JLabel("Max Budget (Rs):");
         lblMax.setFont(new Font("Segoe UI", Font.BOLD, 12));
         txtMaxBudgetFilter = new JTextField(String.valueOf(currentStudent.getMaxBudget()), 6);
@@ -317,6 +429,7 @@ public class StudentDashboard extends JFrame {
         stylePrimaryButton(btnApplyBudget);
         btnApplyBudget.addActionListener(e -> refreshBudgetEvents());
 
+        filterControls.add(lblBudgetMatchCount);
         filterControls.add(lblMax);
         filterControls.add(txtMaxBudgetFilter);
         filterControls.add(cbFreeOnlyFilter);
@@ -331,7 +444,56 @@ public class StudentDashboard extends JFrame {
         };
         budgetTable = createStyledTable(budgetTableModel);
 
-        panel.add(new JScrollPane(budgetTable), BorderLayout.CENTER);
+        // Details preview card below table
+        JPanel detailsCard = new JPanel(new BorderLayout(8, 8));
+        detailsCard.setBackground(CARD_BG);
+        detailsCard.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(CARD_BORDER),
+            BorderFactory.createEmptyBorder(12, 15, 12, 15)
+        ));
+        JLabel lblDetailsTitle = new JLabel("Event Details & One-Click Registration:");
+        lblDetailsTitle.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lblDetailsTitle.setForeground(TEXT_NAVY);
+
+        JTextArea txtBudgetDetails = new JTextArea("Select an event above to view full venue, time, and fee details.", 3, 40);
+        txtBudgetDetails.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        txtBudgetDetails.setForeground(TEXT_NAVY);
+        txtBudgetDetails.setEditable(false);
+        txtBudgetDetails.setLineWrap(true);
+        txtBudgetDetails.setWrapStyleWord(true);
+
+        JButton btnRegisterBudgetEvent = new JButton("Register Selected Event");
+        stylePrimaryButton(btnRegisterBudgetEvent);
+        btnRegisterBudgetEvent.addActionListener(e -> {
+            int row = budgetTable.getSelectedRow();
+            if (row >= 0 && currentBudgetEvents != null && row < currentBudgetEvents.size()) {
+                executeRegistration(currentBudgetEvents.get(row));
+            } else {
+                JOptionPane.showMessageDialog(this, "Please select an event from the table to register.", "Selection Required", JOptionPane.WARNING_MESSAGE);
+            }
+        });
+
+        detailsCard.add(lblDetailsTitle, BorderLayout.NORTH);
+        detailsCard.add(txtBudgetDetails, BorderLayout.CENTER);
+        detailsCard.add(btnRegisterBudgetEvent, BorderLayout.EAST);
+
+        budgetTable.getSelectionModel().addListSelectionListener(e -> {
+            int row = budgetTable.getSelectedRow();
+            if (row >= 0 && currentBudgetEvents != null && row < currentBudgetEvents.size()) {
+                Event ev = currentBudgetEvents.get(row);
+                txtBudgetDetails.setText(
+                    "Event: " + ev.getTitle() + " | Category: " + ev.getCategory() + "\n"
+                    + "Schedule: " + ev.getEventDate() + " (" + ev.getTimeSlot() + ") " + ev.getStartTime() + " - " + ev.getEndTime() + "\n"
+                    + "Venue: " + ev.getVenue() + " [" + ev.getEventFormat() + "] | Fee: " + (ev.getFee() == 0 ? "FREE" : "Rs. " + ev.getFee()) + " | Capacity: " + ev.getMaxCapacity()
+                );
+            }
+        });
+
+        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, new JScrollPane(budgetTable), detailsCard);
+        split.setResizeWeight(0.72);
+        split.setBorder(null);
+
+        panel.add(split, BorderLayout.CENTER);
         return panel;
     }
 
@@ -344,18 +506,188 @@ public class StudentDashboard extends JFrame {
         JPanel header = createHeaderPanel("Skill Growth Pathways", "Step-by-step learning progression aligned with your career goals.");
         panel.add(header, BorderLayout.NORTH);
 
-        txtSkillPathways = new JTextArea();
-        txtSkillPathways.setFont(new Font("Consolas", Font.PLAIN, 13));
-        txtSkillPathways.setEditable(false);
-        txtSkillPathways.setLineWrap(true);
-        txtSkillPathways.setWrapStyleWord(true);
-        txtSkillPathways.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(CARD_BORDER),
-            BorderFactory.createEmptyBorder(15, 15, 15, 15)
+        pnlSkillCardsContainer = new JPanel();
+        pnlSkillCardsContainer.setLayout(new BoxLayout(pnlSkillCardsContainer, BoxLayout.Y_AXIS));
+        pnlSkillCardsContainer.setBackground(BG_CANVAS);
+
+        JScrollPane scroll = new JScrollPane(pnlSkillCardsContainer);
+        scroll.setBorder(null);
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+
+        panel.add(scroll, BorderLayout.CENTER);
+        return panel;
+    }
+
+    private JPanel createStageSection(String stageTitle, String stageSubtitle, Color accentColor, ArrayList<Event> stageEvents) {
+        JPanel stageCard = new JPanel(new BorderLayout(0, 10));
+        stageCard.setBackground(CARD_BG);
+        stageCard.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 5, 0, 0, accentColor),
+            BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(CARD_BORDER, 1),
+                BorderFactory.createEmptyBorder(14, 16, 14, 16)
+            )
         ));
 
-        panel.add(new JScrollPane(txtSkillPathways), BorderLayout.CENTER);
-        return panel;
+        // Header of this stage
+        JPanel stageHeader = new JPanel(new BorderLayout(10, 2));
+        stageHeader.setOpaque(false);
+
+        JLabel lblTitle = new JLabel(stageTitle);
+        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        lblTitle.setForeground(accentColor);
+
+        JLabel lblSub = new JLabel(stageSubtitle);
+        lblSub.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblSub.setForeground(TEXT_MUTED);
+
+        JLabel lblCount = new JLabel(stageEvents.size() + (stageEvents.size() == 1 ? " Event Available" : " Events Available"));
+        lblCount.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lblCount.setForeground(TEXT_NAVY);
+
+        JPanel titleBlock = new JPanel(new GridLayout(2, 1, 0, 2));
+        titleBlock.setOpaque(false);
+        titleBlock.add(lblTitle);
+        titleBlock.add(lblSub);
+
+        stageHeader.add(titleBlock, BorderLayout.CENTER);
+        stageHeader.add(lblCount, BorderLayout.EAST);
+        stageCard.add(stageHeader, BorderLayout.NORTH);
+
+        // Body with list of event cards
+        JPanel eventsListPanel = new JPanel();
+        eventsListPanel.setLayout(new BoxLayout(eventsListPanel, BoxLayout.Y_AXIS));
+        eventsListPanel.setOpaque(false);
+
+        if (stageEvents.isEmpty()) {
+            JPanel emptyPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 12));
+            emptyPanel.setOpaque(false);
+            JLabel lblEmpty = new JLabel("No scheduled events in this stage yet. Check back soon as coordinators publish sessions!");
+            lblEmpty.setFont(new Font("Segoe UI", Font.ITALIC, 12));
+            lblEmpty.setForeground(TEXT_MUTED);
+            emptyPanel.add(lblEmpty);
+            eventsListPanel.add(emptyPanel);
+        } else {
+            for (int i = 0; i < stageEvents.size(); i++) {
+                final Event ev = stageEvents.get(i);
+                JPanel eventItem = new JPanel(new BorderLayout(12, 6));
+                eventItem.setBackground(new Color(250, 252, 255));
+                eventItem.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(230, 235, 245), 1),
+                    BorderFactory.createEmptyBorder(10, 12, 10, 12)
+                ));
+
+                // Left info
+                JPanel infoPanel = new JPanel(new GridLayout(2, 1, 0, 4));
+                infoPanel.setOpaque(false);
+
+                String feeText = ev.getFee() == 0.0 ? "FREE" : "Rs. " + ev.getFee();
+                JLabel lblEventTitle = new JLabel(ev.getTitle() + "  [" + ev.getCategory() + " | " + feeText + "]");
+                lblEventTitle.setFont(new Font("Segoe UI", Font.BOLD, 13));
+                lblEventTitle.setForeground(TEXT_NAVY);
+
+                String skillsReq = (ev.getRequiredSkills() != null && !ev.getRequiredSkills().trim().isEmpty())
+                    ? ev.getRequiredSkills() : "Open to all";
+                JLabel lblEventMeta = new JLabel("Date: " + ev.getEventDate() + " (" + ev.getTimeSlot() + ")  |  Venue: " + ev.getVenue() + " [" + ev.getEventFormat() + "]  |  Skills: " + skillsReq);
+                lblEventMeta.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+                lblEventMeta.setForeground(TEXT_MUTED);
+
+                infoPanel.add(lblEventTitle);
+                infoPanel.add(lblEventMeta);
+                eventItem.add(infoPanel, BorderLayout.CENTER);
+
+                // Right button
+                JButton btnReg = new JButton("Register");
+                stylePrimaryButton(btnReg);
+                btnReg.setPreferredSize(new Dimension(95, 28));
+                btnReg.addActionListener(e -> executeRegistration(ev));
+                eventItem.add(btnReg, BorderLayout.EAST);
+
+                eventsListPanel.add(eventItem);
+                if (i < stageEvents.size() - 1) {
+                    eventsListPanel.add(Box.createVerticalStrut(6));
+                }
+            }
+        }
+
+        stageCard.add(eventsListPanel, BorderLayout.CENTER);
+        return stageCard;
+    }
+
+    private boolean isRelevantToSkillPathway(Event e, Student s) {
+        String cat = e.getCategory() != null ? e.getCategory().toLowerCase() : "";
+        String title = e.getTitle() != null ? e.getTitle().toLowerCase() : "";
+        String reqSkills = e.getRequiredSkills() != null ? e.getRequiredSkills().toLowerCase() : "";
+        String goal = s.getCareerGoals() != null ? s.getCareerGoals().toLowerCase() : "";
+        String interests = s.getInterests() != null ? s.getInterests().toLowerCase() : "";
+        String skills = s.getSkills() != null ? s.getSkills().toLowerCase() : "";
+        String dept = s.getDepartment() != null ? s.getDepartment().toLowerCase() : "";
+
+        if (!interests.isEmpty() && interests.contains(cat)) return true;
+
+        if (!skills.isEmpty()) {
+            String[] skillTokens = skills.split("[, /]+");
+            for (int i = 0; i < skillTokens.length; i++) {
+                String sk = skillTokens[i].trim();
+                if (sk.length() > 1 && (reqSkills.contains(sk) || title.contains(sk) || cat.contains(sk))) {
+                    return true;
+                }
+            }
+        }
+
+        if (!goal.isEmpty()) {
+            String[] goalTokens = goal.split("[, /]+");
+            for (int i = 0; i < goalTokens.length; i++) {
+                String gt = goalTokens[i].trim();
+                if (gt.length() > 2 && (cat.contains(gt) || title.contains(gt) || reqSkills.contains(gt))) {
+                    return true;
+                }
+            }
+        }
+
+        if (dept.contains("cse") || dept.contains("it") || goal.contains("engineer") || goal.contains("developer") || goal.contains("program")) {
+            if (cat.contains("coding") || cat.contains("ai") || cat.contains("web") || cat.contains("tech") ||
+                cat.contains("robotics") || title.contains("python") || title.contains("java") || title.contains("hackathon") ||
+                title.contains("data") || title.contains("cloud") || title.contains("security") || title.contains("dev")) {
+                return true;
+            }
+        }
+
+        if (cat.contains("workshop") || cat.contains("seminar") || cat.contains("entrepreneurship")) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private int determineEventProgressionStage(Event e) {
+        String targetLvl = e.getTargetSkillLevel() != null ? e.getTargetSkillLevel().toLowerCase() : "";
+        String title = e.getTitle() != null ? e.getTitle().toLowerCase() : "";
+        String cat = e.getCategory() != null ? e.getCategory().toLowerCase() : "";
+
+        if (targetLvl.contains("advanced")) return 3;
+        if (targetLvl.contains("intermediate")) return 2;
+        if (targetLvl.contains("beginner")) return 1;
+
+        if (title.contains("hackathon") || title.contains("competition") || title.contains("championship") ||
+            title.contains("conclave") || title.contains("summit") || title.contains("symposium") ||
+            title.contains("capstone") || title.contains("paper") || cat.contains("competition")) {
+            return 3;
+        }
+
+        if (title.contains("bootcamp") || title.contains("challenge") || title.contains("project") ||
+            title.contains("hands-on") || title.contains("deep dive") || title.contains("masterclass") ||
+            title.contains("build") || title.contains("sprint")) {
+            return 2;
+        }
+
+        if (title.contains("intro") || title.contains("fundamental") || title.contains("basics") ||
+            title.contains("workshop") || title.contains("101") || title.contains("seminar") ||
+            title.contains("overview") || e.getFee() == 0.0) {
+            return 1;
+        }
+
+        return 2;
     }
 
     // --- TAB 4: DISCOVER SOMETHING NEW ---
@@ -364,61 +696,242 @@ public class StudentDashboard extends JFrame {
         panel.setBackground(BG_CANVAS);
         panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-        JPanel header = createHeaderPanel("Discover Something New", "Goal-aligned events outside your usual primary interests.");
+        JPanel header = createHeaderPanel("Discover Something New", "Goal-aligned interdisciplinary events outside your usual primary interests.");
         panel.add(header, BorderLayout.NORTH);
 
-        String[] cols = {"Event Title", "Category", "Date & Slot", "Fee", "Venue", "Exploration Reason"};
+        String[] cols = {"Event Title", "Category", "Date & Slot", "Fee", "Venue"};
         discoverTableModel = new DefaultTableModel(cols, 0) {
             public boolean isCellEditable(int r, int c) { return false; }
         };
         discoverTable = createStyledTable(discoverTableModel);
 
-        txtDiscoverExplanation = new JTextArea("Select an exploration event to read why it will broaden your horizons.", 3, 40);
+        // Preview & Dynamic Explanation Card at Bottom
+        JPanel detailsCard = new JPanel(new BorderLayout(10, 10));
+        detailsCard.setBackground(CARD_BG);
+        detailsCard.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(CARD_BORDER),
+            BorderFactory.createEmptyBorder(12, 15, 12, 15)
+        ));
+
+        JLabel lblDetailsTitle = new JLabel("Strategic Cross-Disciplinary Value & One-Click Registration:");
+        lblDetailsTitle.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lblDetailsTitle.setForeground(TEXT_NAVY);
+
+        txtDiscoverExplanation = new JTextArea("Select an exploration event to read why it will broaden your horizons.", 4, 40);
         txtDiscoverExplanation.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        txtDiscoverExplanation.setForeground(TEXT_NAVY);
         txtDiscoverExplanation.setEditable(false);
         txtDiscoverExplanation.setLineWrap(true);
         txtDiscoverExplanation.setWrapStyleWord(true);
+        txtDiscoverExplanation.setBackground(new Color(245, 248, 255));
         txtDiscoverExplanation.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(CARD_BORDER),
-            BorderFactory.createEmptyBorder(10, 12, 10, 12)
+            BorderFactory.createLineBorder(new Color(210, 225, 245), 1),
+            BorderFactory.createEmptyBorder(8, 10, 8, 10)
         ));
 
-        discoverTable.getSelectionModel().addListSelectionListener(e -> {
+        btnRegisterDiscoverEvent = new JButton("Register for Event");
+        stylePrimaryButton(btnRegisterDiscoverEvent);
+        btnRegisterDiscoverEvent.addActionListener(e -> {
             int row = discoverTable.getSelectedRow();
-            if (row >= 0 && row < discoverTableModel.getRowCount()) {
-                txtDiscoverExplanation.setText((String) discoverTableModel.getValueAt(row, 5));
+            if (row >= 0 && currentDiscoverEvents != null && row < currentDiscoverEvents.size()) {
+                executeRegistration(currentDiscoverEvents.get(row));
+            } else {
+                JOptionPane.showMessageDialog(this, "Please select an event from the table to register.", "Selection Required", JOptionPane.WARNING_MESSAGE);
             }
         });
 
-        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, new JScrollPane(discoverTable), txtDiscoverExplanation);
-        split.setResizeWeight(0.8);
+        detailsCard.add(lblDetailsTitle, BorderLayout.NORTH);
+        detailsCard.add(txtDiscoverExplanation, BorderLayout.CENTER);
+        detailsCard.add(btnRegisterDiscoverEvent, BorderLayout.EAST);
+
+        discoverTable.getSelectionModel().addListSelectionListener(e -> {
+            int row = discoverTable.getSelectedRow();
+            if (row >= 0 && currentDiscoverEvents != null && row < currentDiscoverEvents.size()) {
+                updateDiscoverDetailsCard(currentDiscoverEvents.get(row));
+            }
+        });
+
+        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, new JScrollPane(discoverTable), detailsCard);
+        split.setResizeWeight(0.68);
         split.setBorder(null);
 
         panel.add(split, BorderLayout.CENTER);
         return panel;
     }
 
+    private void updateDiscoverDetailsCard(Event ev) {
+        if (ev == null) return;
+        String rationale = generateDiscoverRationale(currentStudent, ev);
+        String feeStr = ev.getFee() == 0.0 ? "FREE" : "Rs. " + ev.getFee();
+        txtDiscoverExplanation.setText(
+            "Event: " + ev.getTitle() + "  |  Category: " + ev.getCategory() + " [" + ev.getEventFormat() + "]\n"
+            + "Schedule: " + ev.getEventDate() + " (" + ev.getTimeSlot() + ") " + ev.getStartTime() + " - " + ev.getEndTime() + "  |  Venue: " + ev.getVenue() + "  |  Fee: " + feeStr + "\n\n"
+            + "STRATEGIC EXPLORATION VALUE:\n" + rationale
+        );
+    }
+
+    private String generateDiscoverRationale(Student s, Event e) {
+        String cat = e.getCategory() != null ? e.getCategory().toLowerCase() : "";
+        String title = e.getTitle() != null ? e.getTitle().toLowerCase() : "";
+        String goal = (s.getCareerGoals() != null && !s.getCareerGoals().trim().isEmpty())
+            ? s.getCareerGoals() : "academic & career development";
+        String dept = s.getDepartment() != null ? s.getDepartment() : "Engineering";
+
+        if (cat.contains("entrepreneur") || title.contains("startup") || title.contains("business") || title.contains("pitch")) {
+            return "As a " + dept + " student aspiring toward " + goal + ", learning venture creation, product monetization, and tech pitching gives you the commercial acumen needed to turn technical prototypes into viable market products.";
+        } else if (cat.contains("public speaking") || cat.contains("debate") || title.contains("communication") || title.contains("toastmaster") || cat.contains("literary")) {
+            return "Mastering public speaking and persuasive argumentation prepares you for technical leadership, high-stakes demos, and research defenses—crucial soft skills that distinguish senior engineers and leaders in " + goal + ".";
+        } else if (cat.contains("robotics") || cat.contains("iot") || title.contains("hardware") || title.contains("arduino")) {
+            return "Venturing into physical computing and embedded systems bridges the gap between pure software algorithms and real-world hardware automation, expanding your versatility as an engineer.";
+        } else if (cat.contains("design") || title.contains("ui/ux") || title.contains("design") || title.contains("user experience") || title.contains("creative")) {
+            return "Gaining proficiency in user-centric design and visual architecture enhances your engineering workflow, enabling you to design intuitive, aesthetically polished applications that users love.";
+        } else if (cat.contains("finance") || title.contains("fintech") || title.contains("investment") || title.contains("crypto")) {
+            return "Understanding financial systems and algorithmic economics opens doors to quantitative engineering and FinTech roles, offering a valuable analytical complement to your " + goal + " roadmap.";
+        } else if (cat.contains("sports") || cat.contains("fitness") || cat.contains("wellness")) {
+            return "Physical endurance, teamwork, and tactical gameplay cultivate mental stamina and stress management, helping you maintain peak cognitive performance through demanding academic sprints.";
+        } else if (cat.contains("photo") || cat.contains("media") || cat.contains("film") || cat.contains("art")) {
+            return "Creative visual storytelling and media production strengthen your personal branding, project documentation, and digital marketing skills in today's tech ecosystem.";
+        } else if (cat.contains("music") || cat.contains("cultural")) {
+            return "Engaging in creative arts stimulates cognitive neuroplasticity and lateral thinking, providing mental refreshment and fresh perspectives for complex algorithmic problem solving.";
+        } else {
+            return "Participating in " + e.getCategory() + " introduces interdisciplinary perspectives outside traditional coursework, cultivating creative problem-solving and well-rounded leadership for your path in " + goal + ".";
+        }
+    }
+
     // --- TAB 5: BROWSE ALL EVENTS ---
     private JPanel createBrowseEventsPanel() {
-        JPanel panel = new JPanel(new BorderLayout(15, 15));
+        JPanel panel = new JPanel(new BorderLayout(12, 12));
         panel.setBackground(BG_CANVAS);
         panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-        JPanel header = createHeaderPanel("Browse Campus Events", "Full catalog of available activities across all departments.");
-        JButton btnRegisterCatalog = new JButton("Register for Event");
-        stylePrimaryButton(btnRegisterCatalog);
-        btnRegisterCatalog.addActionListener(e -> handleRegisterFromCatalog());
-        header.add(btnRegisterCatalog, BorderLayout.EAST);
+        JPanel header = createHeaderPanel("Browse Campus Events", "Search, filter, and inspect all active events across campus departments.");
         panel.add(header, BorderLayout.NORTH);
 
-        String[] cols = {"ID", "Event Title", "Category", "Date & Slot", "Fee (Rs)", "Format", "Skills Needed", "Capacity"};
+        // Filter Bar
+        JPanel filterBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 8));
+        filterBar.setBackground(CARD_BG);
+        filterBar.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(CARD_BORDER),
+            BorderFactory.createEmptyBorder(4, 8, 4, 8)
+        ));
+
+        JLabel lblSearch = new JLabel("Search:");
+        lblSearch.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        txtCatalogSearch = new JTextField(12);
+
+        JLabel lblCat = new JLabel("Category:");
+        lblCat.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        cmbCatalogCategory = new JComboBox<String>(new String[]{
+            "All Categories", "Coding", "AI", "Robotics", "Design", "Entrepreneurship", "Public Speaking", "Sports", "Arts", "Tech"
+        });
+
+        JLabel lblFmt = new JLabel("Format:");
+        lblFmt.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        cmbCatalogFormat = new JComboBox<String>(new String[]{
+            "All Formats", "In-person", "Online", "Hybrid"
+        });
+
+        JButton btnFilterCatalog = new JButton("Filter");
+        stylePrimaryButton(btnFilterCatalog);
+        btnFilterCatalog.setPreferredSize(new Dimension(80, 28));
+        btnFilterCatalog.addActionListener(e -> refreshAllEventsCatalog());
+
+        JButton btnResetCatalog = new JButton("Reset");
+        btnResetCatalog.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        btnResetCatalog.setPreferredSize(new Dimension(80, 28));
+        btnResetCatalog.setFocusPainted(false);
+        btnResetCatalog.addActionListener(e -> {
+            txtCatalogSearch.setText("");
+            cmbCatalogCategory.setSelectedIndex(0);
+            cmbCatalogFormat.setSelectedIndex(0);
+            refreshAllEventsCatalog();
+        });
+
+        lblCatalogCount = new JLabel("Showing events");
+        lblCatalogCount.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lblCatalogCount.setForeground(TEXT_NAVY);
+
+        filterBar.add(lblSearch);
+        filterBar.add(txtCatalogSearch);
+        filterBar.add(lblCat);
+        filterBar.add(cmbCatalogCategory);
+        filterBar.add(lblFmt);
+        filterBar.add(cmbCatalogFormat);
+        filterBar.add(btnFilterCatalog);
+        filterBar.add(btnResetCatalog);
+        filterBar.add(lblCatalogCount);
+
+        // Table
+        String[] cols = {"ID", "Event Title", "Category", "Date & Slot", "Fee", "Format", "Venue", "Capacity & Seats"};
         allEventsTableModel = new DefaultTableModel(cols, 0) {
             public boolean isCellEditable(int r, int c) { return false; }
         };
         allEventsTable = createStyledTable(allEventsTableModel);
 
-        panel.add(new JScrollPane(allEventsTable), BorderLayout.CENTER);
+        // Details & Registration card
+        JPanel detailsCard = new JPanel(new BorderLayout(10, 10));
+        detailsCard.setBackground(CARD_BG);
+        detailsCard.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(CARD_BORDER),
+            BorderFactory.createEmptyBorder(12, 15, 12, 15)
+        ));
+
+        JLabel lblDetailsTitle = new JLabel("Selected Event Overview & One-Click Registration:");
+        lblDetailsTitle.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lblDetailsTitle.setForeground(TEXT_NAVY);
+
+        txtCatalogDetails = new JTextArea("Select an event from the catalog above to view full details and register.", 3, 40);
+        txtCatalogDetails.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        txtCatalogDetails.setForeground(TEXT_NAVY);
+        txtCatalogDetails.setEditable(false);
+        txtCatalogDetails.setLineWrap(true);
+        txtCatalogDetails.setWrapStyleWord(true);
+        txtCatalogDetails.setBackground(new Color(248, 250, 253));
+        txtCatalogDetails.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(220, 230, 245), 1),
+            BorderFactory.createEmptyBorder(8, 10, 8, 10)
+        ));
+
+        JButton btnRegisterCatalogEvent = new JButton("Register for Event");
+        stylePrimaryButton(btnRegisterCatalogEvent);
+        btnRegisterCatalogEvent.addActionListener(e -> handleRegisterFromCatalog());
+
+        detailsCard.add(lblDetailsTitle, BorderLayout.NORTH);
+        detailsCard.add(txtCatalogDetails, BorderLayout.CENTER);
+        detailsCard.add(btnRegisterCatalogEvent, BorderLayout.EAST);
+
+        allEventsTable.getSelectionModel().addListSelectionListener(e -> {
+            int row = allEventsTable.getSelectedRow();
+            if (row >= 0 && currentCatalogEvents != null && row < currentCatalogEvents.size()) {
+                updateCatalogDetailsCard(currentCatalogEvents.get(row));
+            }
+        });
+
+        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, new JScrollPane(allEventsTable), detailsCard);
+        split.setResizeWeight(0.72);
+        split.setBorder(null);
+
+        JPanel centerPanel = new JPanel(new BorderLayout(0, 10));
+        centerPanel.setOpaque(false);
+        centerPanel.add(filterBar, BorderLayout.NORTH);
+        centerPanel.add(split, BorderLayout.CENTER);
+
+        panel.add(centerPanel, BorderLayout.CENTER);
         return panel;
+    }
+
+    private void updateCatalogDetailsCard(Event ev) {
+        if (ev == null) return;
+        int count = registrationDAO.getRegistrationCountForEvent(ev.getEventId());
+        int remaining = Math.max(0, ev.getMaxCapacity() - count);
+        String feeStr = ev.getFee() == 0.0 ? "FREE" : "Rs. " + ev.getFee();
+        String skills = (ev.getRequiredSkills() != null && !ev.getRequiredSkills().trim().isEmpty()) ? ev.getRequiredSkills() : "Open to all";
+
+        txtCatalogDetails.setText(
+            "Event: " + ev.getTitle() + "  |  Category: " + ev.getCategory() + " [" + ev.getEventFormat() + "]  |  Fee: " + feeStr + "\n"
+            + "Schedule: " + ev.getEventDate() + " (" + ev.getTimeSlot() + ") " + ev.getStartTime() + " - " + ev.getEndTime() + "  |  Venue: " + ev.getVenue() + "\n"
+            + "Prerequisites: " + skills + "  |  Capacity: " + count + " / " + ev.getMaxCapacity() + " (" + remaining + " seats available)"
+        );
     }
 
     // --- TAB 6: MY REGISTRATIONS ---
@@ -438,13 +951,23 @@ public class StudentDashboard extends JFrame {
         header.add(btnCancelReg, BorderLayout.EAST);
         panel.add(header, BorderLayout.NORTH);
 
-        String[] cols = {"Reg ID", "Event ID", "Event Title", "Registered At"};
+        String[] cols = {"Reg ID", "Event Title", "Schedule (Date & Slot)", "Venue", "Registered On", "Status"};
         myRegTableModel = new DefaultTableModel(cols, 0) {
             public boolean isCellEditable(int r, int c) { return false; }
         };
         myRegTable = createStyledTable(myRegTableModel);
 
-        panel.add(new JScrollPane(myRegTable), BorderLayout.CENTER);
+        lblMyRegStatus = new JLabel("Loading your registrations...");
+        lblMyRegStatus.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblMyRegStatus.setForeground(TEXT_MUTED);
+        lblMyRegStatus.setBorder(BorderFactory.createEmptyBorder(6, 4, 4, 4));
+
+        JPanel centerPanel = new JPanel(new BorderLayout(0, 6));
+        centerPanel.setOpaque(false);
+        centerPanel.add(new JScrollPane(myRegTable), BorderLayout.CENTER);
+        centerPanel.add(lblMyRegStatus, BorderLayout.SOUTH);
+
+        panel.add(centerPanel, BorderLayout.CENTER);
         return panel;
     }
 
@@ -454,88 +977,276 @@ public class StudentDashboard extends JFrame {
         panel.setBackground(BG_CANVAS);
         panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-        JPanel header = createHeaderPanel("Configure Preference Profile", "Update your six personal and academic criteria at any time.");
-        JButton btnSavePref = new JButton("Save Profile Preferences");
-        stylePrimaryButton(btnSavePref);
-        btnSavePref.addActionListener(e -> handleSavePreferences());
-        header.add(btnSavePref, BorderLayout.EAST);
+        JPanel header = createHeaderPanel("Configure Preference Profile", "Update your academic, financial, interest, and scheduling preferences at any time.");
+        JButton btnSavePrefTop = new JButton("Save Profile Preferences");
+        stylePrimaryButton(btnSavePrefTop);
+        btnSavePrefTop.addActionListener(e -> handleSavePreferences());
+        header.add(btnSavePrefTop, BorderLayout.EAST);
         panel.add(header, BorderLayout.NORTH);
 
-        JPanel card = new JPanel(new GridLayout(10, 2, 10, 8));
-        card.setBackground(CARD_BG);
-        card.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(CARD_BORDER),
-            BorderFactory.createEmptyBorder(20, 25, 20, 25)
+        JPanel pnlPrefsContainer = new JPanel();
+        pnlPrefsContainer.setLayout(new BoxLayout(pnlPrefsContainer, BoxLayout.Y_AXIS));
+        pnlPrefsContainer.setBackground(BG_CANVAS);
+
+        // --- CARD 1: ACADEMIC & FINANCIAL PROFILE ---
+        JPanel card1 = new JPanel(new BorderLayout(0, 10));
+        card1.setBackground(CARD_BG);
+        card1.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 5, 0, 0, new Color(41, 128, 185)),
+            BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(CARD_BORDER, 1),
+                BorderFactory.createEmptyBorder(14, 18, 14, 18)
+            )
         ));
 
-        // 1. Name & Dept
-        card.add(new JLabel("Full Name:"));
-        prefName = new JTextField(currentStudent.getName());
-        card.add(prefName);
+        JPanel c1Header = new JPanel(new GridLayout(2, 1, 0, 2));
+        c1Header.setOpaque(false);
+        JLabel lblC1Title = new JLabel("1. Academic & Financial Profile");
+        lblC1Title.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        lblC1Title.setForeground(TEXT_NAVY);
+        JLabel lblC1Sub = new JLabel("Your department, year, and budget directly filter event eligibility and recommendation relevance.");
+        lblC1Sub.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblC1Sub.setForeground(TEXT_MUTED);
+        c1Header.add(lblC1Title);
+        c1Header.add(lblC1Sub);
+        card1.add(c1Header, BorderLayout.NORTH);
 
-        card.add(new JLabel("Department:"));
+        JPanel c1Grid = new JPanel(new GridLayout(3, 2, 15, 10));
+        c1Grid.setOpaque(false);
+
+        // Full Name
+        JPanel pName = new JPanel(new BorderLayout(4, 2));
+        pName.setOpaque(false);
+        pName.add(new JLabel("Full Name:"), BorderLayout.NORTH);
+        prefName = new JTextField(currentStudent.getName());
+        pName.add(prefName, BorderLayout.CENTER);
+        c1Grid.add(pName);
+
+        // Department
+        JPanel pDept = new JPanel(new BorderLayout(4, 2));
+        pDept.setOpaque(false);
+        pDept.add(new JLabel("Department:"), BorderLayout.NORTH);
         prefDept = new JComboBox<String>(new String[]{"CSE", "IT", "ECE", "MECH", "CIVIL"});
         prefDept.setSelectedItem(currentStudent.getDepartment());
-        card.add(prefDept);
+        pDept.add(prefDept, BorderLayout.CENTER);
+        c1Grid.add(pDept);
 
-        // 2. Year & Budget
-        card.add(new JLabel("Academic Year:"));
+        // Academic Year
+        JPanel pYear = new JPanel(new BorderLayout(4, 2));
+        pYear.setOpaque(false);
+        pYear.add(new JLabel("Academic Year:"), BorderLayout.NORTH);
         prefYear = new JComboBox<Integer>(new Integer[]{1, 2, 3, 4});
         prefYear.setSelectedItem(currentStudent.getAcademicYear());
-        card.add(prefYear);
+        pYear.add(prefYear, BorderLayout.CENTER);
+        c1Grid.add(pYear);
 
-        card.add(new JLabel("Max Budget (Rs) & Free Only:"));
-        JPanel bPanel = new JPanel(new BorderLayout(6, 0));
-        bPanel.setOpaque(false);
+        // Max Budget
+        JPanel pBudget = new JPanel(new BorderLayout(4, 2));
+        pBudget.setOpaque(false);
+        pBudget.add(new JLabel("Max Event Fee Budget (Rs):"), BorderLayout.NORTH);
         prefBudget = new JTextField(String.valueOf(currentStudent.getMaxBudget()));
-        prefFreeOnly = new JCheckBox("Free Only", currentStudent.isFreeOnly());
+        pBudget.add(prefBudget, BorderLayout.CENTER);
+        c1Grid.add(pBudget);
+
+        // Free Only Checkbox
+        JPanel pFree = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 8));
+        pFree.setOpaque(false);
+        prefFreeOnly = new JCheckBox("Strictly Restrict to 100% Free Events", currentStudent.isFreeOnly());
+        prefFreeOnly.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        prefFreeOnly.setForeground(TEXT_NAVY);
         prefFreeOnly.setOpaque(false);
-        bPanel.add(prefBudget, BorderLayout.CENTER);
-        bPanel.add(prefFreeOnly, BorderLayout.EAST);
-        card.add(bPanel);
+        pFree.add(prefFreeOnly);
+        c1Grid.add(pFree);
 
-        // 3. Skills & Level
-        card.add(new JLabel("Skills:"));
+        card1.add(c1Grid, BorderLayout.CENTER);
+        pnlPrefsContainer.add(card1);
+        pnlPrefsContainer.add(Box.createVerticalStrut(14));
+
+        // --- CARD 2: PRIMARY AREAS OF INTEREST (CHECKBOX MATRIX) ---
+        JPanel card2 = new JPanel(new BorderLayout(0, 10));
+        card2.setBackground(CARD_BG);
+        card2.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 5, 0, 0, new Color(39, 174, 96)),
+            BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(CARD_BORDER, 1),
+                BorderFactory.createEmptyBorder(14, 18, 14, 18)
+            )
+        ));
+
+        JPanel c2Header = new JPanel(new GridLayout(2, 1, 0, 2));
+        c2Header.setOpaque(false);
+        JLabel lblC2Title = new JLabel("2. Primary Areas of Interest");
+        lblC2Title.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        lblC2Title.setForeground(TEXT_NAVY);
+        JLabel lblC2Sub = new JLabel("Events in checked categories receive up to +30 match points in the transparent recommendation scoring algorithm.");
+        lblC2Sub.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblC2Sub.setForeground(TEXT_MUTED);
+        c2Header.add(lblC2Title);
+        c2Header.add(lblC2Sub);
+        card2.add(c2Header, BorderLayout.NORTH);
+
+        JPanel c2Grid = new JPanel(new GridLayout(5, 2, 15, 6));
+        c2Grid.setOpaque(false);
+
+        String interestsLower = currentStudent.getInterests() != null ? currentStudent.getInterests().toLowerCase() : "";
+        cbCoding = new JCheckBox("Coding & Software Development", interestsLower.contains("coding"));
+        cbAI = new JCheckBox("AI & Machine Learning", interestsLower.contains("ai") || interestsLower.contains("machine"));
+        cbRobotics = new JCheckBox("Robotics & IoT Automation", interestsLower.contains("robotics") || interestsLower.contains("iot"));
+        cbEntrepreneurship = new JCheckBox("Entrepreneurship & Startups", interestsLower.contains("entrepreneur") || interestsLower.contains("startup"));
+        cbDesign = new JCheckBox("UI/UX & Design Systems", interestsLower.contains("design") || interestsLower.contains("ui"));
+        cbPublicSpeaking = new JCheckBox("Public Speaking & Debate", interestsLower.contains("public") || interestsLower.contains("speaking") || interestsLower.contains("debate"));
+        cbPhotography = new JCheckBox("Photography & Digital Media", interestsLower.contains("photo") || interestsLower.contains("media"));
+        cbSports = new JCheckBox("Sports & Athletics", interestsLower.contains("sports") || interestsLower.contains("fitness"));
+        cbMusic = new JCheckBox("Music & Performing Arts", interestsLower.contains("music") || interestsLower.contains("cultural"));
+        cbDance = new JCheckBox("Dance & Cultural Festivals", interestsLower.contains("dance"));
+
+        JCheckBox[] cbs = {cbCoding, cbAI, cbRobotics, cbEntrepreneurship, cbDesign, cbPublicSpeaking, cbPhotography, cbSports, cbMusic, cbDance};
+        for (int i = 0; i < cbs.length; i++) {
+            cbs[i].setOpaque(false);
+            cbs[i].setFont(new Font("Segoe UI", Font.PLAIN, 12));
+            c2Grid.add(cbs[i]);
+        }
+
+        card2.add(c2Grid, BorderLayout.CENTER);
+        pnlPrefsContainer.add(card2);
+        pnlPrefsContainer.add(Box.createVerticalStrut(14));
+
+        // --- CARD 3: SKILL GROWTH & SCHEDULING PREFERENCES ---
+        JPanel card3 = new JPanel(new BorderLayout(0, 10));
+        card3.setBackground(CARD_BG);
+        card3.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 5, 0, 0, new Color(142, 68, 173)),
+            BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(CARD_BORDER, 1),
+                BorderFactory.createEmptyBorder(14, 18, 14, 18)
+            )
+        ));
+
+        JPanel c3Header = new JPanel(new GridLayout(2, 1, 0, 2));
+        c3Header.setOpaque(false);
+        JLabel lblC3Title = new JLabel("3. Skill Growth & Scheduling Preferences");
+        lblC3Title.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        lblC3Title.setForeground(TEXT_NAVY);
+        JLabel lblC3Sub = new JLabel("Defines your progression stage, preferred time slots, and target career direction.");
+        lblC3Sub.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblC3Sub.setForeground(TEXT_MUTED);
+        c3Header.add(lblC3Title);
+        c3Header.add(lblC3Sub);
+        card3.add(c3Header, BorderLayout.NORTH);
+
+        JPanel c3Grid = new JPanel(new GridLayout(3, 2, 15, 10));
+        c3Grid.setOpaque(false);
+
+        // Skills
+        JPanel pSkills = new JPanel(new BorderLayout(4, 2));
+        pSkills.setOpaque(false);
+        pSkills.add(new JLabel("Known Skills (Comma-separated):"), BorderLayout.NORTH);
         prefSkills = new JTextField(currentStudent.getSkills());
-        card.add(prefSkills);
+        pSkills.add(prefSkills, BorderLayout.CENTER);
+        c3Grid.add(pSkills);
 
-        card.add(new JLabel("Skill Level:"));
+        // Skill Level
+        JPanel pLvl = new JPanel(new BorderLayout(4, 2));
+        pLvl.setOpaque(false);
+        pLvl.add(new JLabel("Current Skill Level:"), BorderLayout.NORTH);
         prefSkillLevel = new JComboBox<String>(new String[]{"Beginner", "Intermediate", "Advanced"});
         prefSkillLevel.setSelectedItem(currentStudent.getSkillLevel());
-        card.add(prefSkillLevel);
+        pLvl.add(prefSkillLevel, BorderLayout.CENTER);
+        c3Grid.add(pLvl);
 
-        // 4. Availability & Preferred Days
-        card.add(new JLabel("Time Slot:"));
+        // Time Slot
+        JPanel pSlot = new JPanel(new BorderLayout(4, 2));
+        pSlot.setOpaque(false);
+        pSlot.add(new JLabel("Preferred Time Slot:"), BorderLayout.NORTH);
         prefSlot = new JComboBox<String>(new String[]{"All", "Morning", "Afternoon", "Evening"});
         prefSlot.setSelectedItem(currentStudent.getAvailableSlot());
-        card.add(prefSlot);
+        pSlot.add(prefSlot, BorderLayout.CENTER);
+        c3Grid.add(pSlot);
 
-        card.add(new JLabel("Preferred Days:"));
+        // Preferred Days
+        JPanel pDays = new JPanel(new BorderLayout(4, 2));
+        pDays.setOpaque(false);
+        pDays.add(new JLabel("Preferred Days:"), BorderLayout.NORTH);
         prefDays = new JComboBox<String>(new String[]{"Both", "Weekdays", "Weekends"});
         prefDays.setSelectedItem(currentStudent.getPreferredDays());
-        card.add(prefDays);
+        pDays.add(prefDays, BorderLayout.CENTER);
+        c3Grid.add(pDays);
 
-        // 5. Goals & Format
-        card.add(new JLabel("Career Goal:"));
+        // Career Goal
+        JPanel pGoal = new JPanel(new BorderLayout(4, 2));
+        pGoal.setOpaque(false);
+        pGoal.add(new JLabel("Target Career Goal:"), BorderLayout.NORTH);
         prefGoal = new JComboBox<String>(new String[]{
-            "Improve programming skills", "Prepare for placements", "Develop leadership",
-            "Build a portfolio", "Learn AI", "Improve communication", "Explore new technologies"
+            "Full Stack Developer", "AI / ML Specialist", "Data Scientist",
+            "Cloud & DevOps Engineer", "Cybersecurity Analyst", "Tech Entrepreneur",
+            "Improve programming skills", "Prepare for placements", "Develop leadership", "Build a portfolio"
         });
         prefGoal.setSelectedItem(currentStudent.getCareerGoals());
-        card.add(prefGoal);
+        pGoal.add(prefGoal, BorderLayout.CENTER);
+        c3Grid.add(pGoal);
 
-        card.add(new JLabel("Event Format:"));
+        // Event Format
+        JPanel pFmt = new JPanel(new BorderLayout(4, 2));
+        pFmt.setOpaque(false);
+        pFmt.add(new JLabel("Preferred Event Format:"), BorderLayout.NORTH);
         prefFormat = new JComboBox<String>(new String[]{"Either", "In-person", "Online"});
         prefFormat.setSelectedItem(currentStudent.getPreferredFormat());
-        card.add(prefFormat);
+        pFmt.add(prefFormat, BorderLayout.CENTER);
+        c3Grid.add(pFmt);
 
-        panel.add(new JScrollPane(card), BorderLayout.CENTER);
+        card3.add(c3Grid, BorderLayout.CENTER);
+        pnlPrefsContainer.add(card3);
+        pnlPrefsContainer.add(Box.createVerticalStrut(16));
+
+        // Bottom Save Button
+        JPanel bottomBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        bottomBar.setOpaque(false);
+        JButton btnSaveBottom = new JButton("Save Profile Preferences");
+        stylePrimaryButton(btnSaveBottom);
+        btnSaveBottom.setPreferredSize(new Dimension(200, 34));
+        btnSaveBottom.addActionListener(e -> handleSavePreferences());
+        bottomBar.add(btnSaveBottom);
+        pnlPrefsContainer.add(bottomBar);
+
+        JScrollPane scroll = new JScrollPane(pnlPrefsContainer);
+        scroll.setBorder(null);
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+
+        panel.add(scroll, BorderLayout.CENTER);
         return panel;
+    }
+
+    private void loadPreferencesIntoUI() {
+        if (currentStudent == null) return;
+        if (prefName != null) prefName.setText(currentStudent.getName());
+        if (prefDept != null) prefDept.setSelectedItem(currentStudent.getDepartment());
+        if (prefYear != null) prefYear.setSelectedItem(currentStudent.getAcademicYear());
+        if (prefBudget != null) prefBudget.setText(String.valueOf(currentStudent.getMaxBudget()));
+        if (prefFreeOnly != null) prefFreeOnly.setSelected(currentStudent.isFreeOnly());
+        if (prefSkills != null) prefSkills.setText(currentStudent.getSkills());
+        if (prefSkillLevel != null) prefSkillLevel.setSelectedItem(currentStudent.getSkillLevel());
+        if (prefSlot != null) prefSlot.setSelectedItem(currentStudent.getAvailableSlot());
+        if (prefDays != null) prefDays.setSelectedItem(currentStudent.getPreferredDays());
+        if (prefGoal != null) prefGoal.setSelectedItem(currentStudent.getCareerGoals());
+        if (prefFormat != null) prefFormat.setSelectedItem(currentStudent.getPreferredFormat());
+
+        String interests = currentStudent.getInterests() != null ? currentStudent.getInterests().toLowerCase() : "";
+        if (cbCoding != null) cbCoding.setSelected(interests.contains("coding"));
+        if (cbAI != null) cbAI.setSelected(interests.contains("ai") || interests.contains("machine"));
+        if (cbRobotics != null) cbRobotics.setSelected(interests.contains("robotics") || interests.contains("iot"));
+        if (cbEntrepreneurship != null) cbEntrepreneurship.setSelected(interests.contains("entrepreneur") || interests.contains("startup"));
+        if (cbDesign != null) cbDesign.setSelected(interests.contains("design") || interests.contains("ui"));
+        if (cbPublicSpeaking != null) cbPublicSpeaking.setSelected(interests.contains("public") || interests.contains("speaking") || interests.contains("debate"));
+        if (cbPhotography != null) cbPhotography.setSelected(interests.contains("photo") || interests.contains("media"));
+        if (cbSports != null) cbSports.setSelected(interests.contains("sports") || interests.contains("fitness"));
+        if (cbMusic != null) cbMusic.setSelected(interests.contains("music") || interests.contains("cultural"));
+        if (cbDance != null) cbDance.setSelected(interests.contains("dance"));
     }
 
     // --- REFRESH & DATA LOGIC ---
     private void refreshAllData() {
         loadStudentProfile();
+        loadPreferencesIntoUI();
         refreshRecommendations();
         refreshBudgetEvents();
         refreshSkillGrowth();
@@ -552,15 +1263,32 @@ public class StudentDashboard extends JFrame {
         for (int i = 0; i < currentRecommendations.size(); i++) {
             EventRecommendation rec = currentRecommendations.get(i);
             Event ev = rec.getEvent();
+
+            String tier;
+            if (rec.getScore() >= 90) {
+                tier = "★ Strong Match";
+            } else if (rec.getScore() >= 70) {
+                tier = "● Good Match";
+            } else {
+                tier = "▲ Moderate Match";
+            }
+
             recTableModel.addRow(new Object[]{
                 rec.getScore() + "/100",
+                tier,
                 ev.getTitle(),
                 ev.getCategory(),
                 ev.getEventDate() + " (" + ev.getTimeSlot() + ")",
                 ev.getFee() == 0 ? "FREE" : "Rs. " + ev.getFee(),
-                ev.getEventFormat(),
-                rec.getBreakdownText()
+                ev.getEventFormat()
             });
+        }
+
+        if (currentRecommendations != null && !currentRecommendations.isEmpty()) {
+            recTable.setRowSelectionInterval(0, 0);
+            updateRecommendationDetailsCard(currentRecommendations.get(0));
+        } else if (txtRecExplanation != null) {
+            txtRecExplanation.setText("No recommended events found matching your department or budget. Try updating your preferences.");
         }
     }
 
@@ -568,32 +1296,65 @@ public class StudentDashboard extends JFrame {
         budgetTableModel.setRowCount(0);
         double maxBudget = currentStudent.getMaxBudget();
         try {
-            if (txtMaxBudgetFilter != null) maxBudget = Double.parseDouble(txtMaxBudgetFilter.getText().trim());
-        } catch (Exception ignored) {}
+            if (txtMaxBudgetFilter != null) {
+                String bText = txtMaxBudgetFilter.getText().trim();
+                if (!bText.isEmpty()) {
+                    double parsed = Double.parseDouble(bText);
+                    if (parsed < 0) {
+                        JOptionPane.showMessageDialog(this, "Maximum budget cannot be negative. Resetting to 0.0.", "Invalid Budget", JOptionPane.WARNING_MESSAGE);
+                        parsed = 0.0;
+                        txtMaxBudgetFilter.setText("0.0");
+                    }
+                    maxBudget = parsed;
+                }
+            }
+        } catch (NumberFormatException nfe) {
+            JOptionPane.showMessageDialog(this, "Please enter a valid numeric budget amount.", "Invalid Format", JOptionPane.WARNING_MESSAGE);
+            txtMaxBudgetFilter.setText(String.valueOf(currentStudent.getMaxBudget()));
+        }
 
         boolean freeOnly = cbFreeOnlyFilter != null ? cbFreeOnlyFilter.isSelected() : currentStudent.isFreeOnly();
 
-        ArrayList<Event> list = eventDAO.getAllEvents();
-        // Bubble sort by fee ascending (O(n^2))
-        for (int i = 0; i < list.size() - 1; i++) {
-            for (int j = 0; j < list.size() - i - 1; j++) {
-                if (list.get(j).getFee() > list.get(j + 1).getFee()) {
-                    Event temp = list.get(j);
-                    list.set(j, list.get(j + 1));
-                    list.set(j + 1, temp);
+        ArrayList<Event> all = eventDAO.getAllEvents();
+        currentBudgetEvents = new ArrayList<Event>();
+
+        // Strictly filter eligible events within budget (exclude over-budget by default)
+        for (int i = 0; i < all.size(); i++) {
+            Event ev = all.get(i);
+            if (freeOnly && ev.getFee() > 0.0) continue;
+            if (ev.getFee() > maxBudget) continue; // Exclude over-budget events!
+            currentBudgetEvents.add(ev);
+        }
+
+        // Bubble sort eligible by fee ascending (O(n^2))
+        for (int i = 0; i < currentBudgetEvents.size() - 1; i++) {
+            for (int j = 0; j < currentBudgetEvents.size() - i - 1; j++) {
+                if (currentBudgetEvents.get(j).getFee() > currentBudgetEvents.get(j + 1).getFee()) {
+                    Event temp = currentBudgetEvents.get(j);
+                    currentBudgetEvents.set(j, currentBudgetEvents.get(j + 1));
+                    currentBudgetEvents.set(j + 1, temp);
                 }
             }
         }
 
-        for (int i = 0; i < list.size(); i++) {
-            Event ev = list.get(i);
-            boolean isAffordable = ev.getFee() <= maxBudget;
-            if (freeOnly && ev.getFee() > 0) continue;
+        if (lblBudgetMatchCount != null) {
+            lblBudgetMatchCount.setText("Matching: " + currentBudgetEvents.size() + " event(s)");
+        }
 
-            String status = isAffordable ? (ev.getFee() == 0 ? "100% Free" : "Affordable") : "Over-Budget (Exceeds Rs. " + maxBudget + ")";
+        if (currentBudgetEvents.isEmpty()) {
+            budgetTableModel.addRow(new Object[]{
+                "No events found matching your budget criteria.", "-", "-", "-", "-", "Try increasing budget or unchecking Free Only"
+            });
+            return;
+        }
+
+        for (int i = 0; i < currentBudgetEvents.size(); i++) {
+            Event ev = currentBudgetEvents.get(i);
+            String feeStr = ev.getFee() == 0.0 ? "FREE" : "Rs. " + ev.getFee();
+            String status = ev.getFee() == 0.0 ? "100% Free" : "Affordable (Within Rs. " + maxBudget + ")";
             budgetTableModel.addRow(new Object[]{
                 ev.getTitle(),
-                ev.getFee() == 0 ? "FREE" : "Rs. " + ev.getFee(),
+                feeStr,
                 ev.getCategory(),
                 ev.getEventDate() + " (" + ev.getTimeSlot() + ")",
                 ev.getVenue(),
@@ -603,86 +1364,207 @@ public class StudentDashboard extends JFrame {
     }
 
     private void refreshSkillGrowth() {
-        ArrayList<Event> events = eventDAO.getAllEvents();
-        StringBuilder sb = new StringBuilder();
-        sb.append("========================================================================================\n");
-        sb.append("                       YOUR TAILORED SKILL GROWTH LEARNING PATHWAY                      \n");
-        sb.append("========================================================================================\n\n");
-        sb.append("Student: ").append(currentStudent.getName()).append(" | Current Level: ").append(currentStudent.getSkillLevel()).append("\n");
-        sb.append("Target Career Goal: ").append(currentStudent.getCareerGoals()).append("\n\n");
+        if (pnlSkillCardsContainer == null) return;
+        pnlSkillCardsContainer.removeAll();
 
-        ArrayList<Event> beginners = new ArrayList<Event>();
-        ArrayList<Event> intermediates = new ArrayList<Event>();
-        ArrayList<Event> advanced = new ArrayList<Event>();
+        ArrayList<Event> allEvents = eventDAO.getAllEvents();
+        String studentGoal = (currentStudent.getCareerGoals() != null && !currentStudent.getCareerGoals().trim().isEmpty())
+            ? currentStudent.getCareerGoals() : "Software Development & Tech Engineering";
 
-        for (int i = 0; i < events.size(); i++) {
-            Event e = events.get(i);
-            String lvl = e.getTargetSkillLevel() != null ? e.getTargetSkillLevel().toLowerCase() : "all";
-            if (lvl.contains("beginner")) beginners.add(e);
-            else if (lvl.contains("intermediate")) intermediates.add(e);
-            else if (lvl.contains("advanced")) advanced.add(e);
-            else {
-                // Open level
-                beginners.add(e);
+        // 1. Top Roadmap Summary Banner Card
+        JPanel summaryCard = new JPanel(new BorderLayout(10, 6));
+        summaryCard.setBackground(CARD_BG);
+        summaryCard.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(CARD_BORDER, 1),
+            BorderFactory.createEmptyBorder(14, 18, 14, 18)
+        ));
+
+        JLabel lblGoalTitle = new JLabel("Target Learning Pathway: " + studentGoal);
+        lblGoalTitle.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        lblGoalTitle.setForeground(TEXT_NAVY);
+
+        JLabel lblStudentMeta = new JLabel("Student: " + currentStudent.getName()
+            + "  |  Department: " + currentStudent.getDepartment() + " (Year " + currentStudent.getAcademicYear() + ")"
+            + "  |  Current Skill Level: " + currentStudent.getSkillLevel()
+            + "  |  Known Skills: " + (currentStudent.getSkills() != null ? currentStudent.getSkills() : "None listed"));
+        lblStudentMeta.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblStudentMeta.setForeground(TEXT_MUTED);
+
+        JPanel summaryText = new JPanel(new GridLayout(2, 1, 0, 4));
+        summaryText.setOpaque(false);
+        summaryText.add(lblGoalTitle);
+        summaryText.add(lblStudentMeta);
+        summaryCard.add(summaryText, BorderLayout.CENTER);
+
+        pnlSkillCardsContainer.add(summaryCard);
+        pnlSkillCardsContainer.add(Box.createVerticalStrut(12));
+
+        // 2. Classify events by stage with relevance filtering
+        ArrayList<Event> stage1Events = new ArrayList<Event>();
+        ArrayList<Event> stage2Events = new ArrayList<Event>();
+        ArrayList<Event> stage3Events = new ArrayList<Event>();
+
+        for (int i = 0; i < allEvents.size(); i++) {
+            Event ev = allEvents.get(i);
+            if (isRelevantToSkillPathway(ev, currentStudent)) {
+                int stage = determineEventProgressionStage(ev);
+                if (stage == 1) stage1Events.add(ev);
+                else if (stage == 2) stage2Events.add(ev);
+                else stage3Events.add(ev);
             }
         }
 
-        sb.append("[STAGE 1: FOUNDATION - BEGINNER]\n");
-        if (beginners.isEmpty()) sb.append("  * No beginner sessions currently listed in database.\n");
-        for (int i = 0; i < beginners.size(); i++) {
-            Event e = beginners.get(i);
-            sb.append("  -> ").append(e.getTitle()).append(" (Fee: Rs. ").append(e.getFee()).append(", ").append(e.getEventDate()).append(")\n");
+        // Fallback: If no events matched strict filter, populate all available events across stages
+        if (stage1Events.isEmpty() && stage2Events.isEmpty() && stage3Events.isEmpty()) {
+            for (int i = 0; i < allEvents.size(); i++) {
+                Event ev = allEvents.get(i);
+                int stage = determineEventProgressionStage(ev);
+                if (stage == 1) stage1Events.add(ev);
+                else if (stage == 2) stage2Events.add(ev);
+                else stage3Events.add(ev);
+            }
         }
 
-        sb.append("\n[STAGE 2: APPLICATION - INTERMEDIATE]\n");
-        if (intermediates.isEmpty()) sb.append("  * No intermediate sessions currently listed in database.\n");
-        for (int i = 0; i < intermediates.size(); i++) {
-            Event e = intermediates.get(i);
-            sb.append("  -> ").append(e.getTitle()).append(" (Fee: Rs. ").append(e.getFee()).append(", ").append(e.getEventDate()).append(")\n");
-        }
+        // 3. Stage 1: Foundation (Beginner)
+        pnlSkillCardsContainer.add(createStageSection(
+            "STAGE 1: FOUNDATION & CORE CONCEPTS (BEGINNER)",
+            "Introductory workshops, fundamental bootcamps, and conceptual grounding to build your base.",
+            new Color(41, 128, 185),
+            stage1Events
+        ));
+        pnlSkillCardsContainer.add(Box.createVerticalStrut(12));
 
-        sb.append("\n[STAGE 3: MASTERY & PORTFOLIO - ADVANCED]\n");
-        if (advanced.isEmpty()) sb.append("  * No advanced competitive sessions currently listed in database.\n");
-        for (int i = 0; i < advanced.size(); i++) {
-            Event e = advanced.get(i);
-            sb.append("  -> ").append(e.getTitle()).append(" (Fee: Rs. ").append(e.getFee()).append(", ").append(e.getEventDate()).append(")\n");
-        }
+        // 4. Stage 2: Practical Application (Intermediate)
+        pnlSkillCardsContainer.add(createStageSection(
+            "STAGE 2: PRACTICAL APPLICATION & MINI-PROJECTS (INTERMEDIATE)",
+            "Hands-on project sprints, coding challenges, and intermediate tech implementation.",
+            new Color(39, 174, 96),
+            stage2Events
+        ));
+        pnlSkillCardsContainer.add(Box.createVerticalStrut(12));
 
-        txtSkillPathways.setText(sb.toString());
+        // 5. Stage 3: Advanced Mastery & Competitions (Advanced)
+        pnlSkillCardsContainer.add(createStageSection(
+            "STAGE 3: ADVANCED MASTERY & PORTFOLIO (ADVANCED)",
+            "High-impact hackathons, symposiums, research conclaves, and portfolio-building competitions.",
+            new Color(142, 68, 173),
+            stage3Events
+        ));
+
+        pnlSkillCardsContainer.revalidate();
+        pnlSkillCardsContainer.repaint();
     }
 
     private void refreshDiscoverNew() {
         discoverTableModel.setRowCount(0);
-        ArrayList<Event> events = eventDAO.getAllEvents();
+        if (currentDiscoverEvents == null) {
+            currentDiscoverEvents = new ArrayList<Event>();
+        }
+        currentDiscoverEvents.clear();
+
+        ArrayList<Event> allEvents = eventDAO.getAllEvents();
         String studentInterests = currentStudent.getInterests() != null ? currentStudent.getInterests().toLowerCase() : "";
 
-        for (int i = 0; i < events.size(); i++) {
-            Event e = events.get(i);
-            // Must be within budget
+        // Collect top recommendation IDs (top 3)
+        ArrayList<Integer> topRecIds = new ArrayList<Integer>();
+        if (currentRecommendations != null) {
+            int limit = Math.min(3, currentRecommendations.size());
+            for (int i = 0; i < limit; i++) {
+                topRecIds.add(currentRecommendations.get(i).getEvent().getEventId());
+            }
+        }
+
+        // Collect registered IDs
+        ArrayList<Integer> registeredIds = new ArrayList<Integer>();
+        String userEmail = currentUser != null ? currentUser.getEmail() : "";
+        ArrayList<Registration> myRegs = registrationDAO.getRegistrationsByStudent(userEmail);
+        for (int i = 0; i < myRegs.size(); i++) {
+            registeredIds.add(myRegs.get(i).getEventId());
+        }
+
+        for (int i = 0; i < allEvents.size(); i++) {
+            Event e = allEvents.get(i);
+
+            // 1. Exclude already registered
+            if (registeredIds.contains(e.getEventId())) continue;
+
+            // 2. Exclude top recommendations
+            if (topRecIds.contains(e.getEventId())) continue;
+
+            // 3. Exclude events matching current student's primary interests/categories
+            String cat = e.getCategory() != null ? e.getCategory().toLowerCase() : "";
+            if (!studentInterests.isEmpty() && studentInterests.contains(cat)) continue;
+
+            // 4. Must be within student's budget
             if (e.getFee() > currentStudent.getMaxBudget()) continue;
             if (currentStudent.isFreeOnly() && e.getFee() > 0) continue;
 
-            // Outside usual primary interests
-            if (!studentInterests.contains(e.getCategory().toLowerCase())) {
-                String reason = "Suggested to broaden your horizon beyond your usual categories while supporting your career goal: " + currentStudent.getCareerGoals();
-                discoverTableModel.addRow(new Object[]{
-                    e.getTitle(),
-                    e.getCategory(),
-                    e.getEventDate() + " (" + e.getTimeSlot() + ")",
-                    e.getFee() == 0 ? "FREE" : "Rs. " + e.getFee(),
-                    e.getVenue(),
-                    reason
-                });
-            }
+            currentDiscoverEvents.add(e);
+            discoverTableModel.addRow(new Object[]{
+                e.getTitle(),
+                e.getCategory(),
+                e.getEventDate() + " (" + e.getTimeSlot() + ")",
+                e.getFee() == 0 ? "FREE" : "Rs. " + e.getFee(),
+                e.getVenue()
+            });
+        }
+
+        if (!currentDiscoverEvents.isEmpty()) {
+            discoverTable.setRowSelectionInterval(0, 0);
+            updateDiscoverDetailsCard(currentDiscoverEvents.get(0));
+        } else {
+            txtDiscoverExplanation.setText("No cross-disciplinary events currently found matching your budget and free-only preferences.");
         }
     }
 
     private void refreshAllEventsCatalog() {
         allEventsTableModel.setRowCount(0);
+        if (currentCatalogEvents == null) {
+            currentCatalogEvents = new ArrayList<Event>();
+        }
+        currentCatalogEvents.clear();
+
         ArrayList<Event> list = eventDAO.getAllEvents();
+        String query = txtCatalogSearch != null ? txtCatalogSearch.getText().trim().toLowerCase() : "";
+        String catFilter = cmbCatalogCategory != null ? (String) cmbCatalogCategory.getSelectedItem() : "All Categories";
+        String formatFilter = cmbCatalogFormat != null ? (String) cmbCatalogFormat.getSelectedItem() : "All Formats";
+
         for (int i = 0; i < list.size(); i++) {
             Event ev = list.get(i);
+
+            // Filter by search query
+            if (!query.isEmpty()) {
+                String title = ev.getTitle().toLowerCase();
+                String cat = ev.getCategory().toLowerCase();
+                String venue = ev.getVenue().toLowerCase();
+                String skills = ev.getRequiredSkills() != null ? ev.getRequiredSkills().toLowerCase() : "";
+                if (!title.contains(query) && !cat.contains(query) && !venue.contains(query) && !skills.contains(query)) {
+                    continue;
+                }
+            }
+
+            // Filter by category
+            if (catFilter != null && !catFilter.startsWith("All")) {
+                if (!ev.getCategory().equalsIgnoreCase(catFilter)) {
+                    continue;
+                }
+            }
+
+            // Filter by format
+            if (formatFilter != null && !formatFilter.startsWith("All")) {
+                if (!ev.getEventFormat().equalsIgnoreCase(formatFilter)) {
+                    continue;
+                }
+            }
+
+            currentCatalogEvents.add(ev);
             int count = registrationDAO.getRegistrationCountForEvent(ev.getEventId());
+            int remaining = Math.max(0, ev.getMaxCapacity() - count);
+            String capacityStr = count + " / " + ev.getMaxCapacity() + " (" + remaining + " left)";
+            if (remaining == 0) {
+                capacityStr = count + " / " + ev.getMaxCapacity() + " [FULL]";
+            }
+
             allEventsTableModel.addRow(new Object[]{
                 ev.getEventId(),
                 ev.getTitle(),
@@ -690,23 +1572,46 @@ public class StudentDashboard extends JFrame {
                 ev.getEventDate() + " (" + ev.getTimeSlot() + ")",
                 ev.getFee() == 0 ? "FREE" : "Rs. " + ev.getFee(),
                 ev.getEventFormat(),
-                ev.getRequiredSkills(),
-                count + " / " + ev.getMaxCapacity()
+                ev.getVenue(),
+                capacityStr
             });
+        }
+
+        if (lblCatalogCount != null) {
+            lblCatalogCount.setText(currentCatalogEvents.size() + " events displayed");
+        }
+
+        if (!currentCatalogEvents.isEmpty()) {
+            allEventsTable.setRowSelectionInterval(0, 0);
+            updateCatalogDetailsCard(currentCatalogEvents.get(0));
+        } else if (txtCatalogDetails != null) {
+            txtCatalogDetails.setText("No campus events found matching your filter criteria.");
         }
     }
 
     private void refreshMyRegistrations() {
         myRegTableModel.setRowCount(0);
-        ArrayList<Registration> list = registrationDAO.getRegistrationsByStudent(currentUser.getEmail());
+        String email = currentUser != null ? currentUser.getEmail() : "";
+        ArrayList<Registration> list = registrationDAO.getRegistrationsByStudent(email);
         for (int i = 0; i < list.size(); i++) {
             Registration r = list.get(i);
+            String schedule = r.getEventDate() + " (" + r.getTimeSlot() + ")";
             myRegTableModel.addRow(new Object[]{
                 r.getRegId(),
-                r.getEventId(),
                 r.getEventTitle(),
-                r.getRegistrationDate()
+                schedule,
+                r.getVenue(),
+                r.getRegistrationDate(),
+                r.getStatus()
             });
+        }
+
+        if (lblMyRegStatus != null) {
+            if (list.isEmpty()) {
+                lblMyRegStatus.setText("You have not enrolled in any campus events yet. Explore 'Recommended Events' or 'Browse Events' to register.");
+            } else {
+                lblMyRegStatus.setText("Total Enrolled Events: " + list.size() + "  |  Select any row and click 'Cancel Registration' to withdraw.");
+            }
         }
     }
 
@@ -794,7 +1699,7 @@ public class StudentDashboard extends JFrame {
             return;
         }
         int regId = (Integer) myRegTableModel.getValueAt(row, 0);
-        String eventTitle = (String) myRegTableModel.getValueAt(row, 2);
+        String eventTitle = (String) myRegTableModel.getValueAt(row, 1);
 
         int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to cancel registration for '" + eventTitle + "'?", "Confirm Cancel", JOptionPane.YES_NO_OPTION);
         if (confirm == JOptionPane.YES_OPTION) {
@@ -807,11 +1712,48 @@ public class StudentDashboard extends JFrame {
 
     private void handleSavePreferences() {
         try {
-            currentStudent.setName(prefName.getText().trim());
+            String name = prefName.getText().trim();
+            if (name.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Full name cannot be blank.", "Validation Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            double budget;
+            try {
+                budget = Double.parseDouble(prefBudget.getText().trim());
+                if (budget < 0) {
+                    JOptionPane.showMessageDialog(this, "Event fee budget cannot be negative.", "Validation Error", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+            } catch (NumberFormatException nfe) {
+                JOptionPane.showMessageDialog(this, "Please enter a valid numeric budget.", "Validation Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            // Assemble interests from checkboxes
+            ArrayList<String> interestsList = new ArrayList<String>();
+            if (cbCoding != null && cbCoding.isSelected()) interestsList.add("Coding");
+            if (cbAI != null && cbAI.isSelected()) interestsList.add("AI");
+            if (cbRobotics != null && cbRobotics.isSelected()) interestsList.add("Robotics");
+            if (cbEntrepreneurship != null && cbEntrepreneurship.isSelected()) interestsList.add("Entrepreneurship");
+            if (cbDesign != null && cbDesign.isSelected()) interestsList.add("Design");
+            if (cbPublicSpeaking != null && cbPublicSpeaking.isSelected()) interestsList.add("Public Speaking");
+            if (cbPhotography != null && cbPhotography.isSelected()) interestsList.add("Photography");
+            if (cbSports != null && cbSports.isSelected()) interestsList.add("Sports");
+            if (cbMusic != null && cbMusic.isSelected()) interestsList.add("Music");
+            if (cbDance != null && cbDance.isSelected()) interestsList.add("Dance");
+
+            String interestsStr = String.join(", ", interestsList);
+            if (interestsStr.isEmpty()) {
+                interestsStr = "Coding";
+            }
+
+            currentStudent.setName(name);
             currentStudent.setDepartment((String) prefDept.getSelectedItem());
             currentStudent.setAcademicYear((Integer) prefYear.getSelectedItem());
-            currentStudent.setMaxBudget(Double.parseDouble(prefBudget.getText().trim()));
+            currentStudent.setMaxBudget(budget);
             currentStudent.setFreeOnly(prefFreeOnly.isSelected());
+            currentStudent.setInterests(interestsStr);
             currentStudent.setSkills(prefSkills.getText().trim());
             currentStudent.setSkillLevel((String) prefSkillLevel.getSelectedItem());
             currentStudent.setAvailableSlot((String) prefSlot.getSelectedItem());
@@ -820,10 +1762,18 @@ public class StudentDashboard extends JFrame {
             currentStudent.setPreferredFormat((String) prefFormat.getSelectedItem());
 
             studentDAO.saveOrUpdateStudent(currentStudent);
-            JOptionPane.showMessageDialog(this, "Your preference profile has been updated successfully!", "Saved", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                "Preference Profile Updated Successfully!\n\n"
+                + "Selected Interests: " + interestsStr + "\n"
+                + "Career Goal: " + currentStudent.getCareerGoals() + "\n"
+                + "Max Budget: Rs. " + budget + " (Free Only: " + (currentStudent.isFreeOnly() ? "Yes" : "No") + ")\n\n"
+                + "All recommendations and progression pathways have been dynamically recalculated.",
+                "Preferences Saved",
+                JOptionPane.INFORMATION_MESSAGE);
+
             refreshAllData();
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Invalid input: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Error saving preferences: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -856,14 +1806,26 @@ public class StudentDashboard extends JFrame {
         table.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.setShowGrid(true);
-        table.setGridColor(new Color(235, 238, 242));
+        table.setGridColor(new Color(226, 232, 240));
+        table.setSelectionBackground(new Color(219, 234, 254));
+        table.setSelectionForeground(new Color(30, 58, 138));
 
         JTableHeader th = table.getTableHeader();
+        th.setPreferredSize(new Dimension(0, 34));
         th.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        th.setBackground(new Color(240, 243, 248));
-        th.setForeground(TEXT_NAVY);
+        th.setBackground(new Color(241, 245, 249));
+        th.setForeground(new Color(15, 23, 42));
+        th.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(203, 213, 225)));
 
-        DefaultTableCellRenderer center = new DefaultTableCellRenderer();
+        DefaultTableCellRenderer center = new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                    boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
+                return c;
+            }
+        };
         center.setHorizontalAlignment(SwingConstants.CENTER);
         table.setDefaultRenderer(Object.class, center);
 

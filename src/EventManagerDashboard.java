@@ -30,6 +30,8 @@ public class EventManagerDashboard extends JFrame {
 
     private CardLayout cardLayout;
     private JPanel mainContentPanel;
+    private java.util.Map<String, JButton> navButtons = new java.util.LinkedHashMap<String, JButton>();
+    private String currentActiveTab = "MANAGE";
 
     // Tab 1: Manage Events
     private DefaultTableModel eventsTableModel;
@@ -39,14 +41,23 @@ public class EventManagerDashboard extends JFrame {
     private JComboBox<Integer> cmbYear;
     private Integer selectedEventId = null;
 
-    // Tab 2: Audience Insights
+    // Tab 2: Audience Insights & Analytics
     private JComboBox<String> cmbInsightEvent;
     private JTextArea txtAudienceMetrics;
     private ArrayList<Event> cachedEvents;
+    private JLabel lblKpiTotalEvents, lblKpiTotalRegs, lblKpiWaitlist, lblKpiRevenue;
+    private JLabel lblKpiUtilization, lblKpiFreePaid, lblKpiTopCategory, lblKpiAvgFee;
+    private DefaultTableModel insightsTableModel;
+    private JTable insightsTable;
 
-    // Tab 3: Registrations & Waitlist
+    // Tab 3: Registrations & Waitlist Management
     private DefaultTableModel regTableModel;
     private JTable regTable;
+    private DefaultTableModel waitlistTableModel;
+    private JTable waitlistTable;
+    private JTextField txtRegSearch;
+    private JComboBox<String> cmbRegFilterEvent;
+    private JLabel lblRosterStatus;
 
     // Visual Palette
     private static final Color BG_CANVAS = new Color(245, 247, 250);
@@ -101,9 +112,9 @@ public class EventManagerDashboard extends JFrame {
         navPanel.setOpaque(false);
         navPanel.setBorder(BorderFactory.createEmptyBorder(15, 10, 15, 10));
 
-        JButton btnNavManage = createNavButton("Manage Events");
-        JButton btnNavInsights = createNavButton("Audience Insights");
-        JButton btnNavRegs = createNavButton("Registrations & Waitlist");
+        JButton btnNavManage = createNavButton("Manage Events", "MANAGE");
+        JButton btnNavInsights = createNavButton("Audience Insights", "INSIGHTS");
+        JButton btnNavRegs = createNavButton("Registrations & Waitlist", "REGS");
 
         navPanel.add(btnNavManage);
         navPanel.add(btnNavInsights);
@@ -144,128 +155,190 @@ public class EventManagerDashboard extends JFrame {
         btnNavInsights.addActionListener(e -> showTab("INSIGHTS"));
         btnNavRegs.addActionListener(e -> showTab("REGS"));
 
+        updateActiveNavButtons();
         add(root);
     }
 
     private void showTab(String key) {
+        currentActiveTab = key;
         cardLayout.show(mainContentPanel, key);
+        updateActiveNavButtons();
         refreshAllData();
     }
 
-    private JButton createNavButton(String title) {
-        JButton btn = new JButton(title);
+    private void updateActiveNavButtons() {
+        for (java.util.Map.Entry<String, JButton> entry : navButtons.entrySet()) {
+            String tabKey = entry.getKey();
+            JButton btn = entry.getValue();
+            if (tabKey.equals(currentActiveTab)) {
+                btn.setBackground(new Color(29, 78, 216)); // Vivid Royal Blue (#1D4ED8)
+                btn.setForeground(Color.WHITE);
+                btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+                btn.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createMatteBorder(0, 4, 0, 0, new Color(96, 165, 250)),
+                    BorderFactory.createEmptyBorder(10, 12, 10, 15)
+                ));
+            } else {
+                btn.setBackground(SIDEBAR_BG);
+                btn.setForeground(new Color(203, 213, 225));
+                btn.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+                btn.setBorder(BorderFactory.createEmptyBorder(10, 16, 10, 15));
+            }
+        }
+    }
+
+    private JButton createNavButton(String title, final String tabKey) {
+        final JButton btn = new JButton(title);
         btn.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        btn.setForeground(new Color(230, 235, 245));
+        btn.setForeground(new Color(203, 213, 225));
         btn.setBackground(SIDEBAR_BG);
-        btn.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
+        btn.setBorder(BorderFactory.createEmptyBorder(10, 16, 10, 15));
         btn.setHorizontalAlignment(SwingConstants.LEFT);
         btn.setFocusPainted(false);
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        btn.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseEntered(java.awt.event.MouseEvent e) {
+                if (!tabKey.equals(currentActiveTab)) {
+                    btn.setBackground(new Color(30, 41, 59));
+                    btn.setForeground(Color.WHITE);
+                }
+            }
+            @Override
+            public void mouseExited(java.awt.event.MouseEvent e) {
+                if (!tabKey.equals(currentActiveTab)) {
+                    btn.setBackground(SIDEBAR_BG);
+                    btn.setForeground(new Color(203, 213, 225));
+                }
+            }
+        });
+
+        navButtons.put(tabKey, btn);
         return btn;
     }
 
     // --- TAB 1: MANAGE EVENTS ---
     private JPanel createManageEventsPanel() {
-        JPanel panel = new JPanel(new BorderLayout(15, 15));
+        JPanel panel = new JPanel(new BorderLayout(15, 12));
         panel.setBackground(BG_CANVAS);
-        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        panel.setBorder(BorderFactory.createEmptyBorder(15, 20, 15, 20));
 
-        JPanel header = createHeaderPanel("Event Creation & Management", "Add, modify, or remove campus events.");
+        JPanel header = createHeaderPanel("Event Creation & Management", "Add, update, or remove campus events with structured category and capacity controls.");
         panel.add(header, BorderLayout.NORTH);
 
-        // Split: Form on Top, Catalog Table on Bottom
-        JPanel formCard = new JPanel(new GridLayout(4, 4, 10, 8));
-        formCard.setBackground(CARD_BG);
-        formCard.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(CARD_BORDER),
-            BorderFactory.createEmptyBorder(15, 15, 15, 15)
-        ));
+        // 3 Grouped Sections for Form Fields
+        JPanel groupsPanel = new JPanel(new GridLayout(1, 3, 12, 0));
+        groupsPanel.setOpaque(false);
 
-        // Row 1
-        formCard.add(new JLabel("Title: *"));
+        // Group 1: Event Identity (Blue accent)
+        JPanel g1 = createFormGroupCard("1. Event Identity", new Color(41, 128, 185));
+        JPanel g1Body = new JPanel(new GridLayout(4, 2, 8, 8));
+        g1Body.setOpaque(false);
+        g1Body.add(new JLabel("Title: *"));
         txtTitle = new JTextField();
-        formCard.add(txtTitle);
-
-        formCard.add(new JLabel("Category: *"));
-        cmbCategory = new JComboBox<String>(new String[]{"Coding", "AI", "Robotics", "Entrepreneurship", "Sports", "Arts", "Public Speaking", "Design"});
-        formCard.add(cmbCategory);
-
-        // Row 2
-        formCard.add(new JLabel("Date (YYYY-MM-DD): *"));
-        txtDate = new JTextField("2026-11-15");
-        formCard.add(txtDate);
-
-        formCard.add(new JLabel("Time Slot & Format:"));
-        JPanel slotFormat = new JPanel(new GridLayout(1, 2, 5, 0));
-        slotFormat.setOpaque(false);
-        cmbSlot = new JComboBox<String>(new String[]{"Morning", "Afternoon", "Evening", "All"});
-        cmbFormat = new JComboBox<String>(new String[]{"In-person", "Online", "Either"});
-        slotFormat.add(cmbSlot);
-        slotFormat.add(cmbFormat);
-        formCard.add(slotFormat);
-
-        // Row 3
-        formCard.add(new JLabel("Fee (Rs) & Max Capacity:"));
-        JPanel feeCap = new JPanel(new GridLayout(1, 2, 5, 0));
-        feeCap.setOpaque(false);
-        txtFee = new JTextField("0.0");
-        txtCapacity = new JTextField("50");
-        feeCap.add(txtFee);
-        feeCap.add(txtCapacity);
-        formCard.add(feeCap);
-
-        formCard.add(new JLabel("Target Level & Venue:"));
-        JPanel lvlVenue = new JPanel(new GridLayout(1, 2, 5, 0));
-        lvlVenue.setOpaque(false);
+        g1Body.add(txtTitle);
+        g1Body.add(new JLabel("Category: *"));
+        cmbCategory = new JComboBox<String>(new String[]{"Coding", "AI", "Robotics", "Entrepreneurship", "Sports", "Arts", "Public Speaking", "Design", "Tech"});
+        g1Body.add(cmbCategory);
+        g1Body.add(new JLabel("Format:"));
+        cmbFormat = new JComboBox<String>(new String[]{"In-person", "Online", "Hybrid"});
+        g1Body.add(cmbFormat);
+        g1Body.add(new JLabel("Target Level:"));
         cmbLevel = new JComboBox<String>(new String[]{"All", "Beginner", "Intermediate", "Advanced"});
-        txtVenue = new JTextField("Main Auditorium");
-        lvlVenue.add(cmbLevel);
-        lvlVenue.add(txtVenue);
-        formCard.add(lvlVenue);
+        g1Body.add(cmbLevel);
+        g1.add(g1Body, BorderLayout.CENTER);
 
-        // Row 4
-        formCard.add(new JLabel("Skills & Department:"));
-        JPanel skillsDept = new JPanel(new GridLayout(1, 2, 5, 0));
-        skillsDept.setOpaque(false);
-        txtSkills = new JTextField("Java, Python");
-        txtDept = new JTextField("All");
-        skillsDept.add(txtSkills);
-        skillsDept.add(txtDept);
-        formCard.add(skillsDept);
-
-        formCard.add(new JLabel("Start & End Time (HH:mm):"));
-        JPanel times = new JPanel(new GridLayout(1, 2, 5, 0));
-        times.setOpaque(false);
+        // Group 2: Schedule & Venue (Green accent)
+        JPanel g2 = createFormGroupCard("2. Schedule & Venue", new Color(39, 174, 96));
+        JPanel g2Body = new JPanel(new GridLayout(4, 2, 8, 8));
+        g2Body.setOpaque(false);
+        g2Body.add(new JLabel("Date (YYYY-MM-DD): *"));
+        txtDate = new JTextField("2026-11-15");
+        g2Body.add(txtDate);
+        g2Body.add(new JLabel("Time Slot:"));
+        cmbSlot = new JComboBox<String>(new String[]{"Morning", "Afternoon", "Evening", "All"});
+        g2Body.add(cmbSlot);
+        g2Body.add(new JLabel("Times (HH:mm):"));
+        JPanel timesPanel = new JPanel(new GridLayout(1, 2, 4, 0));
+        timesPanel.setOpaque(false);
         txtStartTime = new JTextField("10:00");
         txtEndTime = new JTextField("12:00");
-        times.add(txtStartTime);
-        times.add(txtEndTime);
-        formCard.add(times);
+        timesPanel.add(txtStartTime);
+        timesPanel.add(txtEndTime);
+        g2Body.add(timesPanel);
+        g2Body.add(new JLabel("Venue: *"));
+        txtVenue = new JTextField("Main Auditorium");
+        g2Body.add(txtVenue);
+        g2.add(g2Body, BorderLayout.CENTER);
 
-        // Buttons Bar
+        // Group 3: Eligibility & Capacity (Purple accent)
+        JPanel g3 = createFormGroupCard("3. Eligibility & Capacity", new Color(142, 68, 173));
+        JPanel g3Body = new JPanel(new GridLayout(4, 2, 8, 8));
+        g3Body.setOpaque(false);
+        g3Body.add(new JLabel("Department:"));
+        txtDept = new JTextField("All");
+        g3Body.add(txtDept);
+        g3Body.add(new JLabel("Year & Capacity:"));
+        JPanel yearCap = new JPanel(new GridLayout(1, 2, 4, 0));
+        yearCap.setOpaque(false);
+        cmbYear = new JComboBox<Integer>(new Integer[]{0, 1, 2, 3, 4});
+        txtCapacity = new JTextField("50");
+        yearCap.add(cmbYear);
+        yearCap.add(txtCapacity);
+        g3Body.add(yearCap);
+        g3Body.add(new JLabel("Fee (Rs):"));
+        txtFee = new JTextField("0.0");
+        g3Body.add(txtFee);
+        g3Body.add(new JLabel("Required Skills:"));
+        txtSkills = new JTextField("Java, Python");
+        g3Body.add(txtSkills);
+        g3.add(g3Body, BorderLayout.CENTER);
+
+        groupsPanel.add(g1);
+        groupsPanel.add(g2);
+        groupsPanel.add(g3);
+
+        // Buttons Bar with distinct color coding
         JPanel btnBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         btnBar.setOpaque(false);
-        JButton btnAdd = new JButton("Add Event");
-        JButton btnUpdate = new JButton("Update Selected");
-        JButton btnDelete = new JButton("Delete Event");
-        JButton btnClear = new JButton("Clear Form");
 
-        stylePrimaryButton(btnAdd);
-        stylePrimaryButton(btnUpdate);
+        JButton btnAdd = new JButton("+ Add Event");
+        btnAdd.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        btnAdd.setBackground(new Color(39, 174, 96));
+        btnAdd.setForeground(Color.WHITE);
+        btnAdd.setFocusPainted(false);
+        btnAdd.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        JButton btnUpdate = new JButton("✎ Update Selected");
+        btnUpdate.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        btnUpdate.setBackground(new Color(41, 128, 185));
+        btnUpdate.setForeground(Color.WHITE);
+        btnUpdate.setFocusPainted(false);
+        btnUpdate.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        JButton btnClear = new JButton("↺ Clear Form");
+        btnClear.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        btnClear.setBackground(new Color(127, 140, 141));
+        btnClear.setForeground(Color.WHITE);
+        btnClear.setFocusPainted(false);
+        btnClear.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        JButton btnDelete = new JButton("✕ Delete Event");
         btnDelete.setFont(new Font("Segoe UI", Font.BOLD, 12));
         btnDelete.setBackground(new Color(192, 57, 43));
         btnDelete.setForeground(Color.WHITE);
         btnDelete.setFocusPainted(false);
-        btnClear.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        btnDelete.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
         btnBar.add(btnAdd);
         btnBar.add(btnUpdate);
-        btnBar.add(btnDelete);
         btnBar.add(btnClear);
+        btnBar.add(btnDelete);
 
         JPanel topContainer = new JPanel(new BorderLayout(8, 8));
         topContainer.setOpaque(false);
-        topContainer.add(formCard, BorderLayout.CENTER);
+        topContainer.add(groupsPanel, BorderLayout.CENTER);
         topContainer.add(btnBar, BorderLayout.SOUTH);
 
         // Events Table
@@ -277,16 +350,25 @@ public class EventManagerDashboard extends JFrame {
 
         eventsTable.getSelectionModel().addListSelectionListener(e -> {
             int row = eventsTable.getSelectedRow();
-            if (row >= 0) {
+            if (row >= 0 && row < eventsTableModel.getRowCount()) {
                 selectedEventId = (Integer) eventsTableModel.getValueAt(row, 0);
-                txtTitle.setText((String) eventsTableModel.getValueAt(row, 1));
-                cmbCategory.setSelectedItem((String) eventsTableModel.getValueAt(row, 2));
-                txtDate.setText((String) eventsTableModel.getValueAt(row, 3));
-                cmbSlot.setSelectedItem((String) eventsTableModel.getValueAt(row, 4));
-                txtFee.setText(String.valueOf(eventsTableModel.getValueAt(row, 6)));
-                txtVenue.setText((String) eventsTableModel.getValueAt(row, 7));
-                cmbFormat.setSelectedItem((String) eventsTableModel.getValueAt(row, 8));
-                cmbLevel.setSelectedItem((String) eventsTableModel.getValueAt(row, 9));
+                Event fullEv = eventDAO.getEventById(selectedEventId);
+                if (fullEv != null) {
+                    txtTitle.setText(fullEv.getTitle());
+                    cmbCategory.setSelectedItem(fullEv.getCategory());
+                    txtDate.setText(fullEv.getEventDate());
+                    cmbSlot.setSelectedItem(fullEv.getTimeSlot());
+                    txtFee.setText(String.valueOf(fullEv.getFee()));
+                    txtVenue.setText(fullEv.getVenue());
+                    cmbFormat.setSelectedItem(fullEv.getEventFormat());
+                    cmbLevel.setSelectedItem(fullEv.getTargetSkillLevel());
+                    txtCapacity.setText(String.valueOf(fullEv.getMaxCapacity()));
+                    txtSkills.setText(fullEv.getRequiredSkills() != null ? fullEv.getRequiredSkills() : "");
+                    txtDept.setText(fullEv.getEligibleDept() != null ? fullEv.getEligibleDept() : "All");
+                    cmbYear.setSelectedItem(fullEv.getEligibleYear());
+                    txtStartTime.setText(fullEv.getStartTime() != null ? fullEv.getStartTime() : "10:00");
+                    txtEndTime.setText(fullEv.getEndTime() != null ? fullEv.getEndTime() : "12:00");
+                }
             }
         });
 
@@ -296,7 +378,7 @@ public class EventManagerDashboard extends JFrame {
         btnClear.addActionListener(e -> clearForm());
 
         JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topContainer, new JScrollPane(eventsTable));
-        split.setResizeWeight(0.45);
+        split.setResizeWeight(0.48);
         split.setBorder(null);
 
         panel.add(split, BorderLayout.CENTER);
@@ -305,57 +387,214 @@ public class EventManagerDashboard extends JFrame {
 
     // --- TAB 2: AUDIENCE INSIGHTS ---
     private JPanel createAudienceInsightsPanel() {
-        JPanel panel = new JPanel(new BorderLayout(15, 15));
+        JPanel panel = new JPanel(new BorderLayout(15, 12));
         panel.setBackground(BG_CANVAS);
-        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        panel.setBorder(BorderFactory.createEmptyBorder(15, 20, 15, 20));
 
-        JPanel header = createHeaderPanel("Event Audience Insights", "Calculate real matching student profiles and potential attendee statistics.");
-        JPanel selectorPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        selectorPanel.setOpaque(false);
+        JPanel header = createHeaderPanel("Audience Insights & Campus Analytics", "Real-time key performance indicators and matching student demand statistics.");
+        panel.add(header, BorderLayout.NORTH);
 
-        JLabel lblSel = new JLabel("Select Event:");
+        JPanel centerPanel = new JPanel();
+        centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+        centerPanel.setOpaque(false);
+
+        // 8 KPI Metric Cards Grid (2 rows x 4 cols)
+        JPanel kpiGrid = new JPanel(new GridLayout(2, 4, 12, 10));
+        kpiGrid.setOpaque(false);
+        kpiGrid.setMaximumSize(new Dimension(Integer.MAX_VALUE, 150));
+
+        lblKpiTotalEvents = new JLabel("0");
+        lblKpiTotalRegs = new JLabel("0");
+        lblKpiWaitlist = new JLabel("0");
+        lblKpiRevenue = new JLabel("Rs. 0");
+        lblKpiUtilization = new JLabel("0.0%");
+        lblKpiFreePaid = new JLabel("0 / 0");
+        lblKpiTopCategory = new JLabel("None");
+        lblKpiAvgFee = new JLabel("Rs. 0");
+
+        kpiGrid.add(createKpiCard("Total Events Hosted", lblKpiTotalEvents, "Active campus events catalog", new Color(41, 128, 185)));
+        kpiGrid.add(createKpiCard("Total Confirmed Regs", lblKpiTotalRegs, "Enrolled students across events", new Color(39, 174, 96)));
+        kpiGrid.add(createKpiCard("Active Waitlist Queue", lblKpiWaitlist, "Students awaiting seat openings", new Color(211, 84, 0)));
+        kpiGrid.add(createKpiCard("Estimated Revenue", lblKpiRevenue, "Gross registration receipts", new Color(142, 68, 173)));
+        kpiGrid.add(createKpiCard("Avg Capacity Utilization", lblKpiUtilization, "Overall campus seat fill rate", new Color(22, 160, 133)));
+        kpiGrid.add(createKpiCard("Free vs Paid Events", lblKpiFreePaid, "No-cost vs ticketed events", new Color(52, 73, 94)));
+        kpiGrid.add(createKpiCard("Most Popular Category", lblKpiTopCategory, "Highest student enrollments", new Color(230, 126, 34)));
+        kpiGrid.add(createKpiCard("Average Event Fee", lblKpiAvgFee, "Per-attendee fee baseline", new Color(41, 128, 185)));
+
+        centerPanel.add(kpiGrid);
+        centerPanel.add(Box.createVerticalStrut(12));
+
+        // Event Attendance Breakdown Table
+        JPanel tableCard = new JPanel(new BorderLayout(0, 6));
+        tableCard.setBackground(CARD_BG);
+        tableCard.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(CARD_BORDER, 1),
+            BorderFactory.createEmptyBorder(10, 12, 10, 12)
+        ));
+
+        JLabel lblTableTitle = new JLabel("Event Attendance & Capacity Utilization Breakdown");
+        lblTableTitle.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        lblTableTitle.setForeground(TEXT_NAVY);
+        tableCard.add(lblTableTitle, BorderLayout.NORTH);
+
+        String[] cols = {"ID", "Event Title", "Category", "Schedule", "Capacity", "Confirmed", "Waitlist", "Utilization", "Status"};
+        insightsTableModel = new DefaultTableModel(cols, 0) {
+            public boolean isCellEditable(int r, int c) { return false; }
+        };
+        insightsTable = createStyledTable(insightsTableModel);
+
+        // Color renderer for utilization column
+        DefaultTableCellRenderer utilRenderer = new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                if (!isSelected && value != null) {
+                    String str = value.toString();
+                    if (str.contains("100%")) {
+                        c.setForeground(new Color(192, 57, 43));
+                        c.setFont(c.getFont().deriveFont(Font.BOLD));
+                    } else if (str.startsWith("7") || str.startsWith("8") || str.startsWith("9")) {
+                        c.setForeground(new Color(39, 174, 96));
+                        c.setFont(c.getFont().deriveFont(Font.BOLD));
+                    } else {
+                        c.setForeground(TEXT_NAVY);
+                    }
+                }
+                return c;
+            }
+        };
+        insightsTable.getColumnModel().getColumn(7).setCellRenderer(utilRenderer);
+
+        JScrollPane scrollTable = new JScrollPane(insightsTable);
+        scrollTable.setPreferredSize(new Dimension(0, 180));
+        tableCard.add(scrollTable, BorderLayout.CENTER);
+        centerPanel.add(tableCard);
+        centerPanel.add(Box.createVerticalStrut(12));
+
+        // Deep-Dive Persona Selector & Narrative Panel
+        JPanel deepDiveCard = new JPanel(new BorderLayout(0, 8));
+        deepDiveCard.setBackground(CARD_BG);
+        deepDiveCard.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(CARD_BORDER, 1),
+            BorderFactory.createEmptyBorder(10, 12, 10, 12)
+        ));
+
+        JPanel ddHeader = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        ddHeader.setOpaque(false);
+        JLabel lblSel = new JLabel("Deep-Dive Persona Analysis for Event:");
         lblSel.setFont(new Font("Segoe UI", Font.BOLD, 12));
         cmbInsightEvent = new JComboBox<String>();
-        cmbInsightEvent.setPreferredSize(new Dimension(300, 28));
+        cmbInsightEvent.setPreferredSize(new Dimension(320, 28));
 
-        JButton btnCalc = new JButton("Calculate Insights");
+        JButton btnCalc = new JButton("Analyze Audience Matching");
         stylePrimaryButton(btnCalc);
         btnCalc.addActionListener(e -> calculateAudienceInsights());
 
-        selectorPanel.add(lblSel);
-        selectorPanel.add(cmbInsightEvent);
-        selectorPanel.add(btnCalc);
-        header.add(selectorPanel, BorderLayout.EAST);
-        panel.add(header, BorderLayout.NORTH);
+        ddHeader.add(lblSel);
+        ddHeader.add(cmbInsightEvent);
+        ddHeader.add(btnCalc);
+        deepDiveCard.add(ddHeader, BorderLayout.NORTH);
 
-        txtAudienceMetrics = new JTextArea();
-        txtAudienceMetrics.setFont(new Font("Consolas", Font.PLAIN, 14));
+        txtAudienceMetrics = new JTextArea(6, 40);
+        txtAudienceMetrics.setFont(new Font("Consolas", Font.PLAIN, 12));
         txtAudienceMetrics.setEditable(false);
+        txtAudienceMetrics.setBackground(new Color(248, 250, 253));
         txtAudienceMetrics.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(CARD_BORDER),
-            BorderFactory.createEmptyBorder(20, 25, 20, 25)
+            BorderFactory.createLineBorder(new Color(220, 230, 245), 1),
+            BorderFactory.createEmptyBorder(8, 10, 8, 10)
         ));
 
-        panel.add(new JScrollPane(txtAudienceMetrics), BorderLayout.CENTER);
+        deepDiveCard.add(new JScrollPane(txtAudienceMetrics), BorderLayout.CENTER);
+        centerPanel.add(deepDiveCard);
+
+        JScrollPane mainScroll = new JScrollPane(centerPanel);
+        mainScroll.setBorder(null);
+        mainScroll.getVerticalScrollBar().setUnitIncrement(16);
+        panel.add(mainScroll, BorderLayout.CENTER);
+
         return panel;
     }
 
     // --- TAB 3: REGISTRATIONS & WAITLIST ---
     private JPanel createRegistrationsPanel() {
-        JPanel panel = new JPanel(new BorderLayout(15, 15));
+        JPanel panel = new JPanel(new BorderLayout(12, 12));
         panel.setBackground(BG_CANVAS);
-        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        panel.setBorder(BorderFactory.createEmptyBorder(15, 20, 15, 20));
 
-        JPanel header = createHeaderPanel("Confirmed Registrations & Waitlist", "View students registered across all campus activities.");
+        JPanel header = createHeaderPanel("Confirmed Registrations & Smart Waitlist Queue", "Inspect attendee rosters, filter by event, and manage waitlisted applicants.");
         panel.add(header, BorderLayout.NORTH);
 
-        String[] cols = {"Reg ID", "Student Name", "Student Email", "Event ID", "Event Title", "Registered Date"};
-        regTableModel = new DefaultTableModel(cols, 0) {
+        // Filter Bar
+        JPanel filterBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 8));
+        filterBar.setBackground(CARD_BG);
+        filterBar.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(CARD_BORDER),
+            BorderFactory.createEmptyBorder(4, 8, 4, 8)
+        ));
+
+        JLabel lblSearch = new JLabel("Search Student:");
+        lblSearch.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        txtRegSearch = new JTextField(14);
+
+        JLabel lblFilterEv = new JLabel("Event Filter:");
+        lblFilterEv.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        cmbRegFilterEvent = new JComboBox<String>();
+        cmbRegFilterEvent.setPreferredSize(new Dimension(280, 28));
+
+        JButton btnFilterReg = new JButton("Filter");
+        stylePrimaryButton(btnFilterReg);
+        btnFilterReg.setPreferredSize(new Dimension(80, 28));
+        btnFilterReg.addActionListener(e -> refreshRegistrationsTable());
+
+        JButton btnResetReg = new JButton("Reset");
+        btnResetReg.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        btnResetReg.setPreferredSize(new Dimension(80, 28));
+        btnResetReg.setFocusPainted(false);
+        btnResetReg.addActionListener(e -> {
+            txtRegSearch.setText("");
+            if (cmbRegFilterEvent.getItemCount() > 0) cmbRegFilterEvent.setSelectedIndex(0);
+            refreshRegistrationsTable();
+        });
+
+        filterBar.add(lblSearch);
+        filterBar.add(txtRegSearch);
+        filterBar.add(lblFilterEv);
+        filterBar.add(cmbRegFilterEvent);
+        filterBar.add(btnFilterReg);
+        filterBar.add(btnResetReg);
+
+        // Sub-Tabbed Pane for Confirmed vs Waitlist
+        JTabbedPane regTabs = new JTabbedPane();
+        regTabs.setFont(new Font("Segoe UI", Font.BOLD, 12));
+
+        // Sub-Tab 1: Confirmed Attendees
+        String[] confCols = {"Reg ID", "Student Name", "Student Email", "Event ID", "Event Title", "Registered Date", "Status"};
+        regTableModel = new DefaultTableModel(confCols, 0) {
             public boolean isCellEditable(int r, int c) { return false; }
         };
         regTable = createStyledTable(regTableModel);
+        regTabs.addTab("Confirmed Attendees", new JScrollPane(regTable));
 
-        panel.add(new JScrollPane(regTable), BorderLayout.CENTER);
+        // Sub-Tab 2: Smart Waitlist Queue
+        String[] wlCols = {"Waitlist ID", "Queue Pos", "Student Name", "Student Email", "Event Title", "Added At", "Status"};
+        waitlistTableModel = new DefaultTableModel(wlCols, 0) {
+            public boolean isCellEditable(int r, int c) { return false; }
+        };
+        waitlistTable = createStyledTable(waitlistTableModel);
+        regTabs.addTab("Smart Waitlist Queue", new JScrollPane(waitlistTable));
+
+        lblRosterStatus = new JLabel("Loading registrations & waitlists...");
+        lblRosterStatus.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblRosterStatus.setForeground(TEXT_MUTED);
+        lblRosterStatus.setBorder(BorderFactory.createEmptyBorder(6, 4, 4, 4));
+
+        JPanel centerPanel = new JPanel(new BorderLayout(0, 10));
+        centerPanel.setOpaque(false);
+        centerPanel.add(filterBar, BorderLayout.NORTH);
+        centerPanel.add(regTabs, BorderLayout.CENTER);
+        centerPanel.add(lblRosterStatus, BorderLayout.SOUTH);
+
+        panel.add(centerPanel, BorderLayout.CENTER);
         return panel;
     }
 
@@ -364,6 +603,8 @@ public class EventManagerDashboard extends JFrame {
         cachedEvents = eventDAO.getAllEvents();
         refreshEventsTable();
         refreshInsightsDropdown();
+        calculateOverallKPIs();
+        calculateAudienceInsights();
         refreshRegistrationsTable();
     }
 
@@ -388,45 +629,257 @@ public class EventManagerDashboard extends JFrame {
     }
 
     private void refreshInsightsDropdown() {
-        cmbInsightEvent.removeAllItems();
-        for (int i = 0; i < cachedEvents.size(); i++) {
-            Event ev = cachedEvents.get(i);
-            cmbInsightEvent.addItem(ev.getEventId() + ": " + ev.getTitle());
+        if (cmbInsightEvent != null) {
+            cmbInsightEvent.removeAllItems();
+            for (int i = 0; i < cachedEvents.size(); i++) {
+                Event ev = cachedEvents.get(i);
+                cmbInsightEvent.addItem(ev.getEventId() + ": " + ev.getTitle());
+            }
+        }
+        if (cmbRegFilterEvent != null) {
+            cmbRegFilterEvent.removeAllItems();
+            cmbRegFilterEvent.addItem("All Events");
+            for (int i = 0; i < cachedEvents.size(); i++) {
+                Event ev = cachedEvents.get(i);
+                cmbRegFilterEvent.addItem(ev.getEventId() + ": " + ev.getTitle());
+            }
         }
     }
 
+    private void calculateOverallKPIs() {
+        if (lblKpiTotalEvents == null || cachedEvents == null) return;
+        lblKpiTotalEvents.setText(String.valueOf(cachedEvents.size()));
+
+        ArrayList<Registration> allRegs = registrationDAO.getAllRegistrations();
+        lblKpiTotalRegs.setText(String.valueOf(allRegs.size()));
+
+        ArrayList<WaitlistEntry> allWl = registrationDAO.getAllWaitlistEntries();
+        int activeWl = 0;
+        for (int i = 0; i < allWl.size(); i++) {
+            if ("WAITING".equalsIgnoreCase(allWl.get(i).getStatus())) activeWl++;
+        }
+        lblKpiWaitlist.setText(String.valueOf(activeWl));
+
+        double revenue = 0.0;
+        double feeSum = 0.0;
+        int freeCount = 0;
+        int paidCount = 0;
+        double totalUtil = 0.0;
+        java.util.HashMap<String, Integer> catCounts = new java.util.HashMap<String, Integer>();
+
+        if (insightsTableModel != null) {
+            insightsTableModel.setRowCount(0);
+        }
+
+        for (int i = 0; i < cachedEvents.size(); i++) {
+            Event ev = cachedEvents.get(i);
+            feeSum += ev.getFee();
+            if (ev.getFee() == 0.0) freeCount++;
+            else paidCount++;
+
+            int regCount = registrationDAO.getRegistrationCountForEvent(ev.getEventId());
+            int wlCount = registrationDAO.getWaitlistCountForEvent(ev.getEventId());
+            revenue += (regCount * ev.getFee());
+
+            double util = ev.getMaxCapacity() > 0 ? (regCount * 100.0 / ev.getMaxCapacity()) : 0.0;
+            totalUtil += util;
+
+            String cat = ev.getCategory();
+            catCounts.put(cat, catCounts.getOrDefault(cat, 0) + regCount);
+
+            String status = (regCount >= ev.getMaxCapacity()) ? "FULL (" + wlCount + " waiting)" : "Open (" + (ev.getMaxCapacity() - regCount) + " left)";
+            if (insightsTableModel != null) {
+                insightsTableModel.addRow(new Object[]{
+                    ev.getEventId(),
+                    ev.getTitle(),
+                    ev.getCategory(),
+                    ev.getEventDate() + " (" + ev.getTimeSlot() + ")",
+                    ev.getMaxCapacity(),
+                    regCount,
+                    wlCount,
+                    String.format("%.1f%%", util),
+                    status
+                });
+            }
+        }
+
+        lblKpiRevenue.setText("Rs. " + String.format("%.0f", revenue));
+        lblKpiFreePaid.setText(freeCount + " Free / " + paidCount + " Paid");
+        double avgUtil = cachedEvents.isEmpty() ? 0.0 : (totalUtil / cachedEvents.size());
+        lblKpiUtilization.setText(String.format("%.1f%%", avgUtil));
+        double avgFee = cachedEvents.isEmpty() ? 0.0 : (feeSum / cachedEvents.size());
+        lblKpiAvgFee.setText("Rs. " + String.format("%.1f", avgFee));
+
+        String topCat = "None";
+        int maxCatCount = 0;
+        for (String c : catCounts.keySet()) {
+            if (catCounts.get(c) > maxCatCount) {
+                maxCatCount = catCounts.get(c);
+                topCat = c + " (" + maxCatCount + " regs)";
+            }
+        }
+        lblKpiTopCategory.setText(topCat);
+    }
+
     private void refreshRegistrationsTable() {
+        if (regTableModel == null || waitlistTableModel == null) return;
         regTableModel.setRowCount(0);
-        ArrayList<Registration> list = registrationDAO.getAllRegistrations();
-        for (int i = 0; i < list.size(); i++) {
-            Registration r = list.get(i);
+        waitlistTableModel.setRowCount(0);
+
+        String search = txtRegSearch != null ? txtRegSearch.getText().trim().toLowerCase() : "";
+        String selEvent = cmbRegFilterEvent != null ? (String) cmbRegFilterEvent.getSelectedItem() : "All Events";
+        int filterEventId = -1;
+        if (selEvent != null && selEvent.contains(":")) {
+            try {
+                filterEventId = Integer.parseInt(selEvent.split(":")[0].trim());
+            } catch (Exception ignored) {}
+        }
+
+        // 1. Confirmed Registrations
+        ArrayList<Registration> allRegs = registrationDAO.getAllRegistrations();
+        for (int i = 0; i < allRegs.size(); i++) {
+            Registration r = allRegs.get(i);
+            if (filterEventId != -1 && r.getEventId() != filterEventId) continue;
+            if (!search.isEmpty()) {
+                String name = r.getStudentName().toLowerCase();
+                String email = r.getStudentEmail().toLowerCase();
+                String title = r.getEventTitle().toLowerCase();
+                if (!name.contains(search) && !email.contains(search) && !title.contains(search)) {
+                    continue;
+                }
+            }
             regTableModel.addRow(new Object[]{
                 r.getRegId(),
                 r.getStudentName(),
                 r.getStudentEmail(),
                 r.getEventId(),
                 r.getEventTitle(),
-                r.getRegistrationDate()
+                r.getRegistrationDate(),
+                r.getStatus() != null ? r.getStatus() : "CONFIRMED"
             });
         }
+
+        // 2. Smart Waitlist Queue
+        ArrayList<WaitlistEntry> allWl = registrationDAO.getAllWaitlistEntries();
+        java.util.HashMap<Integer, Integer> eventQueueTracker = new java.util.HashMap<Integer, Integer>();
+        for (int i = 0; i < allWl.size(); i++) {
+            WaitlistEntry w = allWl.get(i);
+            if (filterEventId != -1 && w.getEventId() != filterEventId) continue;
+            if (!search.isEmpty()) {
+                String name = w.getStudentName().toLowerCase();
+                String email = w.getStudentEmail().toLowerCase();
+                String title = w.getEventTitle().toLowerCase();
+                if (!name.contains(search) && !email.contains(search) && !title.contains(search)) {
+                    continue;
+                }
+            }
+
+            int queuePos = eventQueueTracker.getOrDefault(w.getEventId(), 0) + 1;
+            if ("WAITING".equalsIgnoreCase(w.getStatus())) {
+                eventQueueTracker.put(w.getEventId(), queuePos);
+            }
+
+            String posStr = "WAITING".equalsIgnoreCase(w.getStatus()) ? "#" + queuePos : "-";
+            waitlistTableModel.addRow(new Object[]{
+                w.getWaitlistId(),
+                posStr,
+                w.getStudentName(),
+                w.getStudentEmail(),
+                w.getEventTitle(),
+                w.getAddedAt(),
+                w.getStatus()
+            });
+        }
+
+        if (lblRosterStatus != null) {
+            int confCount = regTableModel.getRowCount();
+            int wlCount = waitlistTableModel.getRowCount();
+            if (confCount == 0 && wlCount == 0) {
+                lblRosterStatus.setText("No confirmed attendees or waitlisted students found matching your criteria.");
+            } else {
+                lblRosterStatus.setText("Confirmed Attendees: " + confCount + "  |  Active Waitlist Queue: " + wlCount + " students.");
+            }
+        }
+    }
+
+    /**
+     * Validates event form inputs before adding or updating.
+     * @return validation error message, or null if valid.
+     */
+    public static String validateEventInputs(String title, String category, String date,
+                                            String startTime, String endTime,
+                                            double fee, int capacity, String venue) {
+        if (title == null || title.trim().isEmpty()) {
+            return "Event title is required.";
+        }
+        if (venue == null || venue.trim().isEmpty()) {
+            return "Event venue is required.";
+        }
+        if (date == null || !date.matches("^\\d{4}-\\d{2}-\\d{2}$")) {
+            return "Date must follow YYYY-MM-DD format (e.g., 2026-11-15).";
+        }
+        if (fee < 0) {
+            return "Registration fee cannot be negative.";
+        }
+        if (capacity <= 0) {
+            return "Event capacity must be greater than zero.";
+        }
+        // Time format validation (HH:mm 24-hr)
+        if (startTime == null || !startTime.matches("^([01]?[0-9]|2[0-3]):[0-5][0-9]$")) {
+            return "Start time must be in HH:mm 24-hour format (e.g., 10:00).";
+        }
+        if (endTime == null || !endTime.matches("^([01]?[0-9]|2[0-3]):[0-5][0-9]$")) {
+            return "End time must be in HH:mm 24-hour format (e.g., 12:00).";
+        }
+
+        // Chronological order validation
+        String[] sParts = startTime.split(":");
+        String[] eParts = endTime.split(":");
+        int sMins = Integer.parseInt(sParts[0]) * 60 + Integer.parseInt(sParts[1]);
+        int eMins = Integer.parseInt(eParts[0]) * 60 + Integer.parseInt(eParts[1]);
+
+        if (sMins >= eMins) {
+            return "Event start time (" + startTime + ") must be earlier than end time (" + endTime + ").";
+        }
+
+        return null; // All valid
     }
 
     private void handleAddEvent() {
         try {
+            String title = txtTitle.getText().trim();
+            String category = (String) cmbCategory.getSelectedItem();
+            String date = txtDate.getText().trim();
+            String slot = (String) cmbSlot.getSelectedItem();
+            double fee = Double.parseDouble(txtFee.getText().trim());
+            String venue = txtVenue.getText().trim();
+            String skills = txtSkills.getText().trim();
+            String dept = txtDept.getText().trim();
+            String format = (String) cmbFormat.getSelectedItem();
+            String level = (String) cmbLevel.getSelectedItem();
+            String start = txtStartTime.getText().trim();
+            String end = txtEndTime.getText().trim();
+            int capacity = Integer.parseInt(txtCapacity.getText().trim());
+
+            String validationError = validateEventInputs(title, category, date, start, end, fee, capacity, venue);
+            if (validationError != null) {
+                JOptionPane.showMessageDialog(this, validationError, "Validation Error", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
             Event ev = new Event(
-                0, txtTitle.getText().trim(), (String) cmbCategory.getSelectedItem(),
-                txtDate.getText().trim(), (String) cmbSlot.getSelectedItem(),
-                Double.parseDouble(txtFee.getText().trim()), txtVenue.getText().trim(),
-                txtSkills.getText().trim(), txtDept.getText().trim(), 0,
-                (String) cmbFormat.getSelectedItem(), (String) cmbLevel.getSelectedItem(),
-                txtStartTime.getText().trim(), txtEndTime.getText().trim(),
-                Integer.parseInt(txtCapacity.getText().trim())
+                0, title, category, date, slot, fee, venue, skills, dept, 0,
+                format, level, start, end, capacity
             );
             if (eventDAO.addEvent(ev)) {
                 JOptionPane.showMessageDialog(this, "Event successfully added!", "Success", JOptionPane.INFORMATION_MESSAGE);
                 clearForm();
                 refreshAllData();
+            } else {
+                JOptionPane.showMessageDialog(this, "Failed to save event to database.", "Database Error", JOptionPane.ERROR_MESSAGE);
             }
+        } catch (NumberFormatException nfe) {
+            JOptionPane.showMessageDialog(this, "Fee must be a valid number and Capacity must be an integer.", "Input Error", JOptionPane.WARNING_MESSAGE);
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, "Invalid form data: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
@@ -438,20 +891,39 @@ public class EventManagerDashboard extends JFrame {
             return;
         }
         try {
+            String title = txtTitle.getText().trim();
+            String category = (String) cmbCategory.getSelectedItem();
+            String date = txtDate.getText().trim();
+            String slot = (String) cmbSlot.getSelectedItem();
+            double fee = Double.parseDouble(txtFee.getText().trim());
+            String venue = txtVenue.getText().trim();
+            String skills = txtSkills.getText().trim();
+            String dept = txtDept.getText().trim();
+            String format = (String) cmbFormat.getSelectedItem();
+            String level = (String) cmbLevel.getSelectedItem();
+            String start = txtStartTime.getText().trim();
+            String end = txtEndTime.getText().trim();
+            int capacity = Integer.parseInt(txtCapacity.getText().trim());
+
+            String validationError = validateEventInputs(title, category, date, start, end, fee, capacity, venue);
+            if (validationError != null) {
+                JOptionPane.showMessageDialog(this, validationError, "Validation Error", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
             Event ev = new Event(
-                selectedEventId, txtTitle.getText().trim(), (String) cmbCategory.getSelectedItem(),
-                txtDate.getText().trim(), (String) cmbSlot.getSelectedItem(),
-                Double.parseDouble(txtFee.getText().trim()), txtVenue.getText().trim(),
-                txtSkills.getText().trim(), txtDept.getText().trim(), 0,
-                (String) cmbFormat.getSelectedItem(), (String) cmbLevel.getSelectedItem(),
-                txtStartTime.getText().trim(), txtEndTime.getText().trim(),
-                Integer.parseInt(txtCapacity.getText().trim())
+                selectedEventId, title, category, date, slot, fee, venue, skills, dept, 0,
+                format, level, start, end, capacity
             );
             if (eventDAO.updateEvent(ev)) {
                 JOptionPane.showMessageDialog(this, "Event successfully updated!", "Success", JOptionPane.INFORMATION_MESSAGE);
                 clearForm();
                 refreshAllData();
+            } else {
+                JOptionPane.showMessageDialog(this, "Failed to update event in database.", "Database Error", JOptionPane.ERROR_MESSAGE);
             }
+        } catch (NumberFormatException nfe) {
+            JOptionPane.showMessageDialog(this, "Fee must be a valid number and Capacity must be an integer.", "Input Error", JOptionPane.WARNING_MESSAGE);
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, "Error updating event: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
@@ -576,20 +1048,78 @@ public class EventManagerDashboard extends JFrame {
         return p;
     }
 
+    private JPanel createFormGroupCard(String title, Color accentColor) {
+        JPanel card = new JPanel(new BorderLayout(0, 8));
+        card.setBackground(CARD_BG);
+        card.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 4, 0, 0, accentColor),
+            BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(CARD_BORDER, 1),
+                BorderFactory.createEmptyBorder(12, 14, 12, 14)
+            )
+        ));
+        JLabel lblTitle = new JLabel(title);
+        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        lblTitle.setForeground(TEXT_NAVY);
+        card.add(lblTitle, BorderLayout.NORTH);
+        return card;
+    }
+
+    private JPanel createKpiCard(String title, JLabel valueLabel, String subtitle, Color accentColor) {
+        JPanel card = new JPanel(new BorderLayout(0, 4));
+        card.setBackground(CARD_BG);
+        card.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 4, 0, 0, accentColor),
+            BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(CARD_BORDER, 1),
+                BorderFactory.createEmptyBorder(10, 12, 10, 12)
+            )
+        ));
+
+        JLabel lblTitle = new JLabel(title.toUpperCase());
+        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 10));
+        lblTitle.setForeground(TEXT_MUTED);
+
+        valueLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        valueLabel.setForeground(TEXT_NAVY);
+
+        JLabel lblSub = new JLabel(subtitle);
+        lblSub.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+        lblSub.setForeground(TEXT_MUTED);
+
+        card.add(lblTitle, BorderLayout.NORTH);
+        card.add(valueLabel, BorderLayout.CENTER);
+        card.add(lblSub, BorderLayout.SOUTH);
+
+        return card;
+    }
+
     private JTable createStyledTable(DefaultTableModel model) {
         JTable table = new JTable(model);
-        table.setRowHeight(30);
+        table.setRowHeight(32);
         table.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.setShowGrid(true);
-        table.setGridColor(new Color(235, 238, 242));
+        table.setGridColor(new Color(226, 232, 240));
+        table.setSelectionBackground(new Color(219, 234, 254));
+        table.setSelectionForeground(new Color(30, 58, 138));
 
         JTableHeader th = table.getTableHeader();
+        th.setPreferredSize(new Dimension(0, 34));
         th.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        th.setBackground(new Color(240, 243, 248));
-        th.setForeground(TEXT_NAVY);
+        th.setBackground(new Color(241, 245, 249));
+        th.setForeground(new Color(15, 23, 42));
+        th.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(203, 213, 225)));
 
-        DefaultTableCellRenderer center = new DefaultTableCellRenderer();
+        DefaultTableCellRenderer center = new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                    boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
+                return c;
+            }
+        };
         center.setHorizontalAlignment(SwingConstants.CENTER);
         table.setDefaultRenderer(Object.class, center);
 

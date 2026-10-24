@@ -56,6 +56,19 @@ CREATE TABLE IF NOT EXISTS registrations (
     FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
 );
 
+-- 6. Smart Waitlists Table
+CREATE TABLE IF NOT EXISTS waitlists (
+    waitlist_id INT AUTO_INCREMENT PRIMARY KEY,
+    student_id INT DEFAULT 0,
+    student_name VARCHAR(100) NOT NULL,
+    student_email VARCHAR(100) NOT NULL,
+    event_id INT NOT NULL,
+    event_title VARCHAR(120) NOT NULL,
+    added_at VARCHAR(50) NOT NULL,
+    status VARCHAR(20) DEFAULT 'WAITING',
+    FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+);
+
 -- 6. Starter User Accounts (Students register dynamically via registration form)
 -- Coordinator password 'admin123' hashed with SHA-256
 INSERT IGNORE INTO users (username, password, role, full_name, email) VALUES

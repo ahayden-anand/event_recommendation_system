@@ -162,12 +162,15 @@ public class RegistrationDAO {
     }
 
     /**
-     * Retrieves all registrations ordered by reg_id.
+     * Retrieves all registrations ordered by reg_id with event schedule details.
      */
     public ArrayList<Registration> getAllRegistrations() {
         ArrayList<Registration> list = new ArrayList<Registration>();
-        String sql = "SELECT reg_id, student_id, student_name, student_email, event_id, event_title, registered_at "
-                   + "FROM registrations ORDER BY reg_id ASC";
+        String sql = "SELECT r.reg_id, r.student_id, r.student_name, r.student_email, r.event_id, r.event_title, "
+                   + "r.registered_at, e.event_date, e.time_slot, e.venue "
+                   + "FROM registrations r "
+                   + "LEFT JOIN events e ON r.event_id = e.event_id "
+                   + "ORDER BY r.reg_id ASC";
         try (Connection conn = DBConnection.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
@@ -180,7 +183,11 @@ public class RegistrationDAO {
                     rs.getString("student_email"),
                     rs.getInt("event_id"),
                     rs.getString("event_title"),
-                    rs.getString("registered_at")
+                    rs.getString("registered_at"),
+                    rs.getString("event_date") != null ? rs.getString("event_date") : "TBA",
+                    rs.getString("time_slot") != null ? rs.getString("time_slot") : "TBA",
+                    rs.getString("venue") != null ? rs.getString("venue") : "Campus",
+                    "CONFIRMED"
                 );
                 list.add(reg);
             }
@@ -191,12 +198,18 @@ public class RegistrationDAO {
     }
 
     /**
-     * Retrieves registrations filtered by student email.
+     * Retrieves registrations filtered by student email (case-insensitive) with full schedule details.
      */
     public ArrayList<Registration> getRegistrationsByStudent(String email) {
         ArrayList<Registration> list = new ArrayList<Registration>();
-        String sql = "SELECT reg_id, student_id, student_name, student_email, event_id, event_title, registered_at "
-                   + "FROM registrations WHERE student_email=? ORDER BY reg_id ASC";
+        if (email == null) return list;
+
+        String sql = "SELECT r.reg_id, r.student_id, r.student_name, r.student_email, r.event_id, r.event_title, "
+                   + "r.registered_at, e.event_date, e.time_slot, e.venue "
+                   + "FROM registrations r "
+                   + "LEFT JOIN events e ON r.event_id = e.event_id "
+                   + "WHERE LOWER(TRIM(r.student_email)) = LOWER(TRIM(?)) "
+                   + "ORDER BY r.reg_id ASC";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, email);
@@ -209,7 +222,11 @@ public class RegistrationDAO {
                         rs.getString("student_email"),
                         rs.getInt("event_id"),
                         rs.getString("event_title"),
-                        rs.getString("registered_at")
+                        rs.getString("registered_at"),
+                        rs.getString("event_date") != null ? rs.getString("event_date") : "TBA",
+                        rs.getString("time_slot") != null ? rs.getString("time_slot") : "TBA",
+                        rs.getString("venue") != null ? rs.getString("venue") : "Campus",
+                        "CONFIRMED"
                     ));
                 }
             }
@@ -240,17 +257,101 @@ public class RegistrationDAO {
 
     /**
      * Cancels a student registration.
+     * Uses atomic JDBC transaction: removes registration and automatically promotes
+     * the earliest waitlisted student in FIFO order into confirmed registration.
+     * @param regId The registration ID to cancel
+     * @return true if successfully cancelled (and waitlist promoted if applicable)
      */
     public boolean cancelRegistration(int regId) {
-        String sql = "DELETE FROM registrations WHERE reg_id=?";
-        try (Connection conn = DBConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, regId);
-            return ps.executeUpdate() > 0;
+        Connection conn = null;
+        try {
+            conn = DBConnection.getConnection();
+            conn.setAutoCommit(false); // Begin atomic transaction
+
+            // 1. Retrieve the event_id and event_title of the registration being cancelled
+            int eventId = -1;
+            String eventTitle = "";
+            String findSql = "SELECT event_id, event_title FROM registrations WHERE reg_id=?";
+            try (PreparedStatement findPs = conn.prepareStatement(findSql)) {
+                findPs.setInt(1, regId);
+                try (ResultSet rs = findPs.executeQuery()) {
+                    if (rs.next()) {
+                        eventId = rs.getInt("event_id");
+                        eventTitle = rs.getString("event_title");
+                    }
+                }
+            }
+
+            if (eventId == -1) {
+                conn.rollback();
+                return false;
+            }
+
+            // 2. Delete the registration record
+            String delSql = "DELETE FROM registrations WHERE reg_id=?";
+            try (PreparedStatement delPs = conn.prepareStatement(delSql)) {
+                delPs.setInt(1, regId);
+                int deleted = delPs.executeUpdate();
+                if (deleted == 0) {
+                    conn.rollback();
+                    return false;
+                }
+            }
+
+            // 3. Smart Waitlist Promotion: Check if any student is waiting for this event (FIFO)
+            String wlSql = "SELECT waitlist_id, student_id, student_name, student_email "
+                         + "FROM waitlists WHERE event_id=? AND status='WAITING' "
+                         + "ORDER BY waitlist_id ASC LIMIT 1";
+            try (PreparedStatement wlPs = conn.prepareStatement(wlSql)) {
+                wlPs.setInt(1, eventId);
+                try (ResultSet rs = wlPs.executeQuery()) {
+                    if (rs.next()) {
+                        int waitlistId = rs.getInt("waitlist_id");
+                        int studentId = rs.getInt("student_id");
+                        String studentName = rs.getString("student_name");
+                        String studentEmail = rs.getString("student_email");
+
+                        // Promote to confirmed registration
+                        String promoteSql = "INSERT INTO registrations (student_id, student_name, student_email, event_id, event_title, registered_at) "
+                                          + "VALUES (?, ?, ?, ?, ?, ?)";
+                        try (PreparedStatement prPs = conn.prepareStatement(promoteSql)) {
+                            prPs.setInt(1, studentId);
+                            prPs.setString(2, studentName);
+                            prPs.setString(3, studentEmail);
+                            prPs.setInt(4, eventId);
+                            prPs.setString(5, eventTitle);
+                            prPs.setString(6, java.time.LocalDate.now().toString());
+                            prPs.executeUpdate();
+                        }
+
+                        // Mark waitlist entry status as PROMOTED
+                        String updateWlSql = "UPDATE waitlists SET status='PROMOTED' WHERE waitlist_id=?";
+                        try (PreparedStatement upPs = conn.prepareStatement(updateWlSql)) {
+                            upPs.setInt(1, waitlistId);
+                            upPs.executeUpdate();
+                        }
+                    }
+                }
+            }
+
+            conn.commit(); // Commit transaction
+            return true;
         } catch (SQLException e) {
-            System.err.println("Error cancelling registration: " + e.getMessage());
+            System.err.println("Error cancelling registration with waitlist promotion: " + e.getMessage());
+            if (conn != null) {
+                try {
+                    conn.rollback();
+                } catch (SQLException ignored) {}
+            }
+            return false;
+        } finally {
+            if (conn != null) {
+                try {
+                    conn.setAutoCommit(true);
+                    conn.close();
+                } catch (SQLException ignored) {}
+            }
         }
-        return false;
     }
 
     /**
@@ -289,5 +390,34 @@ public class RegistrationDAO {
             System.err.println("Error counting waitlist: " + e.getMessage());
         }
         return 0;
+    }
+
+    /**
+     * Retrieves all waitlist entries across all events for coordinator reporting.
+     * @return List of WaitlistEntry objects in FIFO order per event.
+     */
+    public ArrayList<WaitlistEntry> getAllWaitlistEntries() {
+        ArrayList<WaitlistEntry> list = new ArrayList<WaitlistEntry>();
+        String sql = "SELECT waitlist_id, student_id, student_name, student_email, event_id, event_title, added_at, status "
+                   + "FROM waitlists ORDER BY event_id ASC, waitlist_id ASC";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                list.add(new WaitlistEntry(
+                    rs.getInt("waitlist_id"),
+                    rs.getInt("student_id"),
+                    rs.getString("student_name"),
+                    rs.getString("student_email"),
+                    rs.getInt("event_id"),
+                    rs.getString("event_title"),
+                    rs.getString("added_at"),
+                    rs.getString("status")
+                ));
+            }
+        } catch (SQLException e) {
+            System.err.println("Error fetching all waitlist entries: " + e.getMessage());
+        }
+        return list;
     }
 }

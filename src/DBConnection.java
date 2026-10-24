@@ -155,6 +155,18 @@ public class DBConnection {
                        + "registered_at VARCHAR(50) NOT NULL, "
                        + "FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE)");
 
+            // 5. Smart Waitlists Table
+            stmt.execute("CREATE TABLE IF NOT EXISTS waitlists ("
+                       + "waitlist_id INT AUTO_INCREMENT PRIMARY KEY, "
+                       + "student_id INT DEFAULT 0, "
+                       + "student_name VARCHAR(100) NOT NULL, "
+                       + "student_email VARCHAR(100) NOT NULL, "
+                       + "event_id INT NOT NULL, "
+                       + "event_title VARCHAR(120) NOT NULL, "
+                       + "added_at VARCHAR(50) NOT NULL, "
+                       + "status VARCHAR(20) DEFAULT 'WAITING', "
+                       + "FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE)");
+
             // 5. Seed coordinator account if missing (students register their own accounts)
             String coordinatorHash = UserDAO.hashPassword("admin123");
             stmt.execute("INSERT IGNORE INTO users (username, password, role, full_name, email) VALUES "
