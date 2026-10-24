@@ -14,7 +14,7 @@ public class DBConnection {
     // Database connection parameters - Stored in one place
     private static final String URL = "jdbc:mysql://localhost:3306/campus_events_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
     private static String USER = "root";
-    private static String PASSWORD = "Vedha@0523"; // Confirmed MySQL root password
+    private static String PASSWORD = "hayden15"; // Confirmed MySQL root password
 
     // Static block to load the MySQL Connector/J driver
     static {
@@ -27,11 +27,28 @@ public class DBConnection {
 
     /**
      * Returns a live JDBC Connection using the configured credentials.
+     * Automatically attempts known credentials if root password varies.
      * @return Connection object
      * @throws SQLException if connection fails
      */
     public static Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(URL, USER, PASSWORD);
+        try {
+            return DriverManager.getConnection(URL, USER, PASSWORD);
+        } catch (SQLException e) {
+            // Auto-fallback in case password varies
+            String[] alternatives = {"hayden15", "Vedha@0523", "root", ""};
+            for (String alt : alternatives) {
+                if (!alt.equals(PASSWORD)) {
+                    try {
+                        Connection conn = DriverManager.getConnection(URL, USER, alt);
+                        PASSWORD = alt; // update for subsequent calls
+                        return conn;
+                    } catch (SQLException ignored) {
+                    }
+                }
+            }
+            throw e;
+        }
     }
 
     /**
@@ -91,7 +108,18 @@ public class DBConnection {
                        + "venue VARCHAR(120) NOT NULL, "
                        + "required_skills VARCHAR(255), "
                        + "eligible_dept VARCHAR(100) DEFAULT 'All', "
-                       + "eligible_year INT DEFAULT 0)");
+                       + "eligible_year INT DEFAULT 0, "
+                       + "event_format VARCHAR(20) DEFAULT 'Offline', "
+                       + "target_skill_level VARCHAR(20) DEFAULT 'All', "
+                       + "start_time VARCHAR(20) DEFAULT '09:00 AM', "
+                       + "end_time VARCHAR(20) DEFAULT '05:00 PM', "
+                       + "max_capacity INT DEFAULT 100)");
+
+            try { stmt.execute("ALTER TABLE events ADD COLUMN event_format VARCHAR(20) DEFAULT 'Offline'"); } catch (SQLException ignored) {}
+            try { stmt.execute("ALTER TABLE events ADD COLUMN target_skill_level VARCHAR(20) DEFAULT 'All'"); } catch (SQLException ignored) {}
+            try { stmt.execute("ALTER TABLE events ADD COLUMN start_time VARCHAR(20) DEFAULT '09:00 AM'"); } catch (SQLException ignored) {}
+            try { stmt.execute("ALTER TABLE events ADD COLUMN end_time VARCHAR(20) DEFAULT '05:00 PM'"); } catch (SQLException ignored) {}
+            try { stmt.execute("ALTER TABLE events ADD COLUMN max_capacity INT DEFAULT 100"); } catch (SQLException ignored) {}
 
             // 3. Students Table
             stmt.execute("CREATE TABLE IF NOT EXISTS students ("
@@ -103,7 +131,18 @@ public class DBConnection {
                        + "budget DOUBLE NOT NULL DEFAULT 0.0, "
                        + "interests VARCHAR(255), "
                        + "skills VARCHAR(255), "
-                       + "availability VARCHAR(50))");
+                       + "availability VARCHAR(50), "
+                       + "skill_level VARCHAR(20) DEFAULT 'Beginner', "
+                       + "preferred_days VARCHAR(50) DEFAULT 'Both', "
+                       + "career_goals VARCHAR(255) DEFAULT 'Improve programming skills', "
+                       + "preferred_format VARCHAR(20) DEFAULT 'Either', "
+                       + "free_only TINYINT(1) DEFAULT 0)");
+
+            try { stmt.execute("ALTER TABLE students ADD COLUMN skill_level VARCHAR(20) DEFAULT 'Beginner'"); } catch (SQLException ignored) {}
+            try { stmt.execute("ALTER TABLE students ADD COLUMN preferred_days VARCHAR(50) DEFAULT 'Both'"); } catch (SQLException ignored) {}
+            try { stmt.execute("ALTER TABLE students ADD COLUMN career_goals VARCHAR(255) DEFAULT 'Improve programming skills'"); } catch (SQLException ignored) {}
+            try { stmt.execute("ALTER TABLE students ADD COLUMN preferred_format VARCHAR(20) DEFAULT 'Either'"); } catch (SQLException ignored) {}
+            try { stmt.execute("ALTER TABLE students ADD COLUMN free_only TINYINT(1) DEFAULT 0"); } catch (SQLException ignored) {}
 
             // 4. Registrations Table
             stmt.execute("CREATE TABLE IF NOT EXISTS registrations ("
